@@ -8,40 +8,80 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
     :root { --main-brown: #5c4b40; --line-color: #c9b8ad; }
-    body { background-color: #f4ece6; font-family: 'Inter', sans-serif; color: var(--main-brown); -webkit-font-smoothing: antialiased; }
+    body { background-color: #f4ece6; font-family: 'Inter', sans-serif; color: var(--main-brown); -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
     .serif { font-family: 'Playfair Display', serif; }
     .planner-line { border-bottom: 1px solid var(--line-color); }
     .settled { opacity: 0.3; text-decoration: line-through; filter: grayscale(1); }
     .custom-scroll::-webkit-scrollbar { height: 0px; width: 0px; } 
 
-    /* 手機優化：加大輸入區域與防止 iOS 自動縮放 */
-    input[type="text"], input[type="number"], input[type="date"], select { 
+    input[type="text"], input[type="number"] { 
       background: #ffffff; 
       outline: none; 
       border: 1px solid var(--line-color); 
       border-radius: 12px;
-      font-size: 16px !important; /* iOS 必須 16px 才不會在點擊時自動放大螢幕 */
+      font-size: 16px !important; 
       padding: 12px;
       width: 100%;
       -webkit-appearance: none;
     }
+
+    /* 修正 Currency 選擇框：置中且不貼邊 */
+    select { 
+      background: #ffffff; 
+      outline: none; 
+      border: 1px solid var(--line-color); 
+      border-radius: 12px;
+      font-size: 16px !important; 
+      padding: 12px;
+      width: 100%;
+      -webkit-appearance: none;
+      text-align: center;
+      text-align-last: center; /* 確保選中的文字在下拉框裡置中 */
+    }
+
+    input[type="date"] {
+      background: #ffffff;
+      border: 1px solid var(--line-color);
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 14px !important;
+      color: var(--main-brown);
+      width: 100%;
+    }
     
-    /* 標題輸入維持透明簡潔 */
     #tripName { background: transparent; border: none; font-size: 26px !important; padding: 0; box-shadow: none; }
     
     .btn-primary { background-color: var(--main-brown); color: white; padding: 14px 16px; border-radius: 12px; font-size: 14px; font-weight: bold; width: 100%; }
     .card { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid var(--line-color); }
     
-    /* 切換頁籤加大，方便手指點選 */
     .trip-tab { background: #dcd0c5; padding: 12px 20px; border-radius: 14px 14px 0 0; font-size: 13px; font-weight: bold; white-space: nowrap; cursor: pointer; color: #8a7a70; }
     .trip-tab.active { background: #faf7f2; color: var(--main-brown); }
     .pre-trip-box { background: #ede3db; border: 1px solid var(--line-color); border-radius: 20px; }
     
-    /* 加大勾選框 */
     input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--main-brown); }
+
+    .jump-btn {
+      position: fixed;
+      bottom: 25px;
+      right: 25px;
+      width: 50px;
+      height: 50px;
+      background: var(--main-brown);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      z-index: 99;
+      font-size: 24px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body class="p-0">
+
+  <div class="jump-btn" onclick="document.getElementById('settlementArea').scrollIntoView()">↓</div>
 
   <main class="max-w-md mx-auto bg-[#faf7f2] min-h-screen flex flex-col shadow-xl">
     <div class="flex overflow-x-auto bg-[#e8ded5] px-2 pt-2 gap-1 custom-scroll">
@@ -49,7 +89,7 @@
         <button onclick="addNewTrip()" class="px-4 py-2 text-xl font-bold opacity-50">+</button>
     </div>
 
-    <div class="p-4 bg-white/80 sticky top-0 z-10 border-b border-[#c9b8ad] space-y-3">
+    <div class="p-4 bg-white/80 border-b border-[#c9b8ad] space-y-3">
       <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif">
       
       <div class="flex gap-2">
@@ -74,7 +114,7 @@
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-8">
+    <div class="flex-1 p-4 space-y-8">
         <div class="p-3 planner-line flex justify-between items-center bg-white/30 rounded-xl">
             <div id="memberList" class="flex flex-wrap gap-2"></div>
             <button onclick="addMember()" class="text-blue-600 font-bold text-[11px] uppercase">+ Member</button>
@@ -99,7 +139,7 @@
 
         <div id="timelineContainer" class="space-y-8"></div>
 
-        <section class="mt-8 pt-8 border-t-2 border-dashed border-[#c9b8ad]">
+        <section id="settlementArea" class="mt-8 pt-8 border-t-2 border-dashed border-[#c9b8ad]">
             <div class="card p-4 shadow-sm">
                 <h3 class="serif text-xl mb-4 text-center">Settlement</h3>
                 <div class="overflow-x-auto rounded-lg border border-gray-100 mb-6">
@@ -169,7 +209,7 @@
   </div>
 
 <script>
-  // 邏輯保持完全不變
+  // 核心邏輯保持原封不動
   let trips = JSON.parse(localStorage.getItem('tripLedger_all') || '[{"id":1,"name":"New Trip"}]');
   let currentTripId = parseInt(localStorage.getItem('tripLedger_currentId') || '1');
   let state = {};
