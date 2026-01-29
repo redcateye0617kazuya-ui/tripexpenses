@@ -25,7 +25,6 @@
 
     .serif { font-family: 'Playfair Display', serif; }
     
-    /* 圓潤卡片與柔和陰影 */
     .app-card { 
       background: var(--soft-white); 
       border-radius: 28px; 
@@ -36,7 +35,6 @@
     .settled { opacity: 0.3; text-decoration: line-through; filter: grayscale(1); }
     .custom-scroll::-webkit-scrollbar { height: 0px; width: 0px; } 
 
-    /* 輸入框優化 - 模擬 Bankin 質感 */
     input[type="text"], input[type="number"], select { 
       background: #ffffff; 
       outline: none; 
@@ -53,16 +51,18 @@
     input[type="date"] {
       background: #ffffff;
       border-radius: 16px;
-      padding: 12px;
-      font-size: 14px !important;
+      padding: 10px 8px;
+      font-size: 13px !important;
       color: var(--main-brown);
       width: 100%;
       border: none;
+      -webkit-appearance: none;
+      display: block;
+      box-sizing: border-box;
     }
     
     #tripName { background: transparent; border: none; font-size: 28px !important; padding: 0; box-shadow: none; text-align: left; }
     
-    /* 按鈕樣式 */
     .btn-primary { 
       background-color: var(--main-brown); 
       color: white; 
@@ -111,7 +111,6 @@
       font-size: 24px;
     }
 
-    /* Pool 區塊特別色調 */
     .pool-box {
       background: #dfd8cf;
       border-radius: 28px;
@@ -131,12 +130,12 @@
     <div class="px-6 py-2 space-y-4">
       <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif font-bold">
       
-      <div class="flex gap-3 bg-white/40 p-2 rounded-[24px]">
-          <div class="flex-1">
+      <div class="flex gap-3 bg-white/40 p-3 rounded-[24px] items-end">
+          <div class="flex-1 min-w-0">
             <p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">Start Date</p>
             <input type="date" id="startDate" onchange="saveAll()">
           </div>
-          <div class="flex-1">
+          <div class="flex-1 min-w-0">
             <p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">End Date</p>
             <input type="date" id="endDate" onchange="saveAll()">
           </div>
@@ -200,7 +199,10 @@
                 </div>
                 <div id="transferList" class="space-y-3"></div>
                 <button onclick="copySummary()" class="btn-primary shadow-lg uppercase tracking-widest">Copy Report</button>
-                <button onclick="deleteCurrentTrip()" class="w-full text-[10px] opacity-40 font-bold">DELETE TRIP</button>
+                <div class="flex flex-col gap-2 pt-2">
+                    <button onclick="deleteCurrentTrip()" class="w-full text-[10px] opacity-40 font-bold">DELETE TRIP</button>
+                    <button onclick="resetAllData()" class="w-full text-[10px] text-red-400 opacity-60 font-bold">RESET ALL DATA</button>
+                </div>
             </div>
         </section>
         <div class="h-20"></div>
@@ -252,7 +254,6 @@
   </div>
 
 <script>
-  // 核心邏輯完全保留
   let trips = JSON.parse(localStorage.getItem('tripLedger_all') || '[{"id":1,"name":"New Trip"}]');
   let currentTripId = parseInt(localStorage.getItem('tripLedger_currentId') || '1');
   let state = {};
@@ -277,6 +278,14 @@
   function addNewTrip() { saveAll(); const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; init(); }
   function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id !== currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_all', JSON.stringify(trips)); init(); } }
 
+  // 新增 Reset 功能
+  function resetAllData() {
+    if (confirm("🚨 WARNING: This will permanently delete ALL trips and settings. Are you sure?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  }
+
   function saveAll() {
     state.tripName = document.getElementById('tripName').value;
     state.startDate = document.getElementById('startDate').value;
@@ -287,6 +296,7 @@
     if (idx !== -1) trips[idx] = { ...state };
     localStorage.setItem('tripLedger_all', JSON.stringify(trips));
     renderTabs();
+    syncUI();
   }
 
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
@@ -326,8 +336,9 @@
         let d = new Date(start); let dayCount = 1;
         while (d <= end) {
             const ds = d.toISOString().split('T')[0];
+            const displayDate = ds.replace(/-/g, '/');
             const dayExps = exps.filter(e => e.date === ds);
-            h += `<div class="mb-8"><div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${dayCount}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${ds}</p></div><div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button></div>`;
+            h += `<div class="mb-8"><div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${dayCount}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${displayDate}</p></div><div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button></div>`;
             d.setDate(d.getDate() + 1); dayCount++;
         }
     }
@@ -364,12 +375,17 @@
     });
     document.getElementById('commonPoolInfo').innerText = Math.round(poolBalance).toLocaleString();
     document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between"><span>+ ${d.curr} ${d.amt}</span><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div>`).join('');
+    
     document.getElementById('calculationTable').innerHTML = members.map(m => {
-        const netHKD = (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD;
+        const totalPaidInHKD = calc[m].paidHKD + (calc[m].paidTarget / state.rateVal);
+        const netHKD = totalPaidInHKD - calc[m].costHKD;
         return `<tr><td class="p-4 font-bold">${m}</td><td class="p-4 text-right opacity-60">${calc[m].paidHKD.toFixed(0)}</td><td class="p-4 text-right opacity-60">${calc[m].paidTarget.toFixed(0)}</td><td class="p-4 text-right font-bold ${netHKD>=0?'text-green-700':'text-red-700'}">${netHKD>0?'+':''}${netHKD.toFixed(0)}</td></tr>`;
     }).join('');
     
-    let netA = members.map(m => ({ name: m, bal: (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD }));
+    let netA = members.map(m => ({ 
+        name: m, 
+        bal: (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD 
+    }));
     let creditors = netA.filter(x => x.bal > 0.5).sort((a,b) => b.bal - a.bal);
     let debtors = netA.filter(x => x.bal < -0.5).sort((a,b) => a.bal - b.bal);
     let tHtml = '';
