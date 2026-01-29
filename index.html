@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>📜 Trip Ledger - Final Edition</title>
+  <title>📜 Trip Ledger - Mobile Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
@@ -13,12 +13,32 @@
     .planner-line { border-bottom: 1px solid var(--line-color); }
     .settled { opacity: 0.3; text-decoration: line-through; filter: grayscale(1); }
     .custom-scroll::-webkit-scrollbar { height: 0px; width: 0px; } 
-    input, select { background: transparent; outline: none; border-bottom: 1px solid var(--line-color); font-size: 14px; }
-    .btn-primary { background-color: var(--main-brown); color: white; padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+
+    /* 手機優化：加大輸入區域與防止 iOS 自動縮放 */
+    input[type="text"], input[type="number"], input[type="date"], select { 
+      background: #ffffff; 
+      outline: none; 
+      border: 1px solid var(--line-color); 
+      border-radius: 12px;
+      font-size: 16px !important; /* iOS 必須 16px 才不會在點擊時自動放大螢幕 */
+      padding: 12px;
+      width: 100%;
+      -webkit-appearance: none;
+    }
+    
+    /* 標題輸入維持透明簡潔 */
+    #tripName { background: transparent; border: none; font-size: 26px !important; padding: 0; box-shadow: none; }
+    
+    .btn-primary { background-color: var(--main-brown); color: white; padding: 14px 16px; border-radius: 12px; font-size: 14px; font-weight: bold; width: 100%; }
     .card { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid var(--line-color); }
-    .trip-tab { background: #dcd0c5; padding: 8px 16px; border-radius: 12px 12px 0 0; font-size: 11px; font-weight: bold; white-space: nowrap; cursor: pointer; color: #8a7a70; }
+    
+    /* 切換頁籤加大，方便手指點選 */
+    .trip-tab { background: #dcd0c5; padding: 12px 20px; border-radius: 14px 14px 0 0; font-size: 13px; font-weight: bold; white-space: nowrap; cursor: pointer; color: #8a7a70; }
     .trip-tab.active { background: #faf7f2; color: var(--main-brown); }
     .pre-trip-box { background: #ede3db; border: 1px solid var(--line-color); border-radius: 20px; }
+    
+    /* 加大勾選框 */
+    input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--main-brown); }
   </style>
 </head>
 <body class="p-0">
@@ -26,46 +46,53 @@
   <main class="max-w-md mx-auto bg-[#faf7f2] min-h-screen flex flex-col shadow-xl">
     <div class="flex overflow-x-auto bg-[#e8ded5] px-2 pt-2 gap-1 custom-scroll">
         <div id="tabContainer" class="flex gap-1"></div>
-        <button onclick="addNewTrip()" class="px-3 py-2 text-lg font-bold opacity-50">+</button>
+        <button onclick="addNewTrip()" class="px-4 py-2 text-xl font-bold opacity-50">+</button>
     </div>
 
-    <div class="p-4 bg-white/80 sticky top-0 z-10 border-b border-[#c9b8ad]">
-      <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif text-2xl w-full border-none mb-2">
-      <div class="flex gap-2 mb-3">
-          <input type="date" id="startDate" onchange="saveAll()" class="text-[10px] border-none font-bold uppercase opacity-60">
-          <span class="opacity-30">→</span>
-          <input type="date" id="endDate" onchange="saveAll()" class="text-[10px] border-none font-bold uppercase opacity-60">
+    <div class="p-4 bg-white/80 sticky top-0 z-10 border-b border-[#c9b8ad] space-y-3">
+      <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif">
+      
+      <div class="flex gap-2">
+          <div class="flex-1">
+            <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Start Date</p>
+            <input type="date" id="startDate" onchange="saveAll()">
+          </div>
+          <div class="flex-1">
+            <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">End Date</p>
+            <input type="date" id="endDate" onchange="saveAll()">
+          </div>
       </div>
-      <div class="pt-2 border-t border-gray-100 flex items-center gap-2">
-          <span class="text-[9px] font-bold uppercase opacity-50">1 HKD =</span>
-          <select id="targetCurr" onchange="handleCurrChange()" class="font-bold text-xs text-blue-600 border-none">
+
+      <div class="pt-3 border-t border-gray-100 flex items-center gap-2">
+          <span class="text-[10px] font-bold uppercase opacity-50">1 HKD =</span>
+          <select id="targetCurr" onchange="handleCurrChange()" class="!w-24 !py-1.5 !px-2 font-bold text-blue-600">
               <option value="JPY">JPY</option><option value="KRW">KRW</option>
               <option value="USD">USD</option><option value="TWD">TWD</option>
           </select>
-          <input id="currentRateVal" type="number" step="0.001" onchange="saveAll()" class="font-bold text-sm w-16 text-center border-b">
-          <button onclick="fetchLiveRate()" class="ml-auto text-[8px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-bold uppercase">Live Rate</button>
+          <input id="currentRateVal" type="number" step="0.001" onchange="saveAll()" class="!w-24 !py-1.5 text-center font-bold">
+          <button onclick="fetchLiveRate()" class="ml-auto text-[10px] bg-blue-50 text-blue-600 px-3 py-2 rounded-full font-bold">Live Rate</button>
       </div>
     </div>
 
     <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-8">
         <div class="p-3 planner-line flex justify-between items-center bg-white/30 rounded-xl">
             <div id="memberList" class="flex flex-wrap gap-2"></div>
-            <button onclick="addMember()" class="text-blue-600 font-bold text-[10px] uppercase">+ Member</button>
+            <button onclick="addMember()" class="text-blue-600 font-bold text-[11px] uppercase">+ Member</button>
         </div>
 
         <section class="bg-orange-50 p-4 rounded-2xl border border-orange-200 shadow-sm">
             <div class="flex justify-between items-center mb-2">
                 <p class="text-[10px] font-bold text-orange-800 uppercase tracking-widest">Common Pool (<span class="target-curr-label">---</span>)</p>
-                <button onclick="openDepositModal()" class="text-[10px] bg-orange-600 text-white px-3 py-1 rounded-lg font-bold">+ TOP UP</button>
+                <button onclick="openDepositModal()" class="text-[10px] bg-orange-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm">+ TOP UP</button>
             </div>
-            <div id="commonPoolInfo" class="text-2xl font-bold text-orange-900">0</div>
+            <div id="commonPoolInfo" class="text-3xl font-bold text-orange-900">0</div>
             <div id="depositList" class="mt-4 space-y-1"></div>
         </section>
 
         <section class="pre-trip-box p-4 shadow-sm">
             <div class="flex justify-between items-center mb-3">
                 <p class="serif text-xl">Pre-Trip</p>
-                <button onclick="openModal('PRE')" class="text-[10px] font-bold text-gray-500 bg-white/50 px-3 py-1 rounded-full uppercase">+ Add Pre-Trip</button>
+                <button onclick="openModal('PRE')" class="text-[10px] font-bold text-gray-500 bg-white/50 px-3 py-1.5 rounded-full uppercase">+ Add Pre-Trip</button>
             </div>
             <div id="preTripContainer" class="space-y-2"></div>
         </section>
@@ -88,9 +115,9 @@
                         <tbody id="calculationTable"></tbody>
                     </table>
                 </div>
-                <div id="transferList" class="space-y-2 mb-4"></div>
-                <button onclick="copySummary()" class="btn-primary w-full shadow-lg uppercase tracking-widest">Copy Report</button>
-                <button onclick="deleteCurrentTrip()" class="w-full mt-4 text-[10px] text-red-300 uppercase font-bold">Delete Entire Trip</button>
+                <div id="transferList" class="space-y-3 mb-6"></div>
+                <button onclick="copySummary()" class="btn-primary shadow-lg uppercase tracking-widest">Copy Report</button>
+                <button onclick="deleteCurrentTrip()" class="w-full mt-6 text-[10px] text-red-400 uppercase font-bold text-center">Delete Entire Trip</button>
             </div>
         </section>
         <div class="h-10"></div>
@@ -98,36 +125,51 @@
   </main>
 
   <div id="modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-end">
-    <div class="bg-[#faf7f2] w-full rounded-t-3xl p-6 shadow-2xl">
+    <div class="bg-[#faf7f2] w-full rounded-t-3xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-6 rounded-full"></div>
         <h3 id="modalTitle" class="serif text-xl mb-6 text-center">Add Record</h3>
         <input type="hidden" id="exDate">
-        <input id="exDesc" type="text" placeholder="Description (e.g. Flight, Dinner)" class="w-full py-3 mb-4 text-base border-b">
-        <div class="flex gap-4 mb-6">
-            <input id="exAmt" type="number" inputmode="decimal" placeholder="0.00" class="flex-1 text-2xl font-bold py-2 border-b">
-            <select id="exCurr" class="text-lg font-bold border-none">
-                <option value="HKD">HKD</option>
-                <option id="modalTargetCurrOption" value=""></option>
-            </select>
-        </div>
-        <div id="payerSection">
-            <div id="poolToggleArea" class="flex items-center gap-2 mb-6 bg-orange-100/50 p-3 rounded-xl border border-orange-200">
-                <input type="checkbox" id="usePool" onchange="togglePoolPayer(this.checked)" class="w-5 h-5 accent-orange-700">
-                <label for="usePool" class="text-sm font-bold text-orange-900">Paid by Common Pool?</label>
+        <div class="space-y-5">
+            <div>
+                <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Description</p>
+                <input id="exDesc" type="text" placeholder="e.g. Flight, Dinner">
             </div>
-            <div id="personalPayerFields" class="grid grid-cols-2 gap-6 mb-6">
-                <div><p class="text-[9px] font-bold uppercase opacity-50 mb-2">Payer</p><select id="exPayer" class="w-full p-2 bg-white rounded-lg border border-gray-200"></select></div>
-                <div><p class="text-[9px] font-bold uppercase opacity-50 mb-2">Splitees</p><div id="modalSplit" class="h-32 overflow-y-auto border bg-white rounded-lg p-2 text-[10px] space-y-1"></div></div>
+            <div class="flex gap-4">
+                <div class="flex-1">
+                    <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Amount</p>
+                    <input id="exAmt" type="number" inputmode="decimal" placeholder="0.00" class="font-bold">
+                </div>
+                <div class="w-28">
+                    <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Currency</p>
+                    <select id="exCurr" class="font-bold"></select>
+                </div>
+            </div>
+            <div id="payerSection">
+                <div class="flex items-center gap-3 p-4 bg-orange-100/50 rounded-2xl border border-orange-200 mb-5">
+                    <input type="checkbox" id="usePool" onchange="togglePoolPayer(this.checked)">
+                    <label for="usePool" class="text-sm font-bold text-orange-900">Paid by Common Pool?</label>
+                </div>
+                <div id="personalPayerFields" class="grid grid-cols-1 gap-5">
+                    <div>
+                        <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Payer</p>
+                        <select id="exPayer"></select>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold opacity-40 mb-1 uppercase">Splitees</p>
+                        <div id="modalSplit" class="max-h-48 overflow-y-auto border border-gray-200 bg-white rounded-2xl p-4 space-y-4"></div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="flex gap-4 pb-4">
+        <div class="flex gap-4 mt-8 pb-6">
             <button onclick="closeModal()" class="flex-1 py-4 text-sm font-bold text-gray-400">Cancel</button>
-            <button onclick="saveRecord()" class="flex-1 py-4 btn-primary rounded-xl shadow-lg">SAVE</button>
+            <button onclick="saveRecord()" class="flex-1 btn-primary shadow-lg">SAVE</button>
         </div>
     </div>
   </div>
 
 <script>
+  // 邏輯保持完全不變
   let trips = JSON.parse(localStorage.getItem('tripLedger_all') || '[{"id":1,"name":"New Trip"}]');
   let currentTripId = parseInt(localStorage.getItem('tripLedger_currentId') || '1');
   let state = {};
@@ -139,7 +181,6 @@
     renderTabs(); syncUI();
   }
 
-  // 修改：這裡讓 Tab 名稱即時反應當前輸入內容
   function renderTabs() {
     const container = document.getElementById('tabContainer');
     container.innerHTML = trips.map(t => {
@@ -153,7 +194,6 @@
   function addNewTrip() { saveAll(); const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; init(); }
   function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id !== currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_all', JSON.stringify(trips)); init(); } }
 
-  // 修改：確保每次 saveAll 都會重新渲染 Tabs 標題
   function saveAll() {
     state.tripName = document.getElementById('tripName').value;
     state.startDate = document.getElementById('startDate').value;
@@ -163,8 +203,7 @@
     const idx = trips.findIndex(t => t.id === currentTripId);
     if (idx !== -1) trips[idx] = { ...state };
     localStorage.setItem('tripLedger_all', JSON.stringify(trips));
-    renderTabs(); // 關鍵：更新 Tab 顯示
-    // 為了不讓打字時輸入框失去焦點或 Timeline 閃爍，saveAll 在 input 時不呼叫 syncUI()
+    renderTabs();
   }
 
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
@@ -175,7 +214,7 @@
         if (data && data.rates[state.targetCurr]) {
             state.rateVal = parseFloat(data.rates[state.targetCurr].toFixed(4));
             document.getElementById('currentRateVal').value = state.rateVal;
-            saveAll(); syncUI(); // 匯率變動則更新全域
+            saveAll(); syncUI();
         }
     } catch (e) { console.error(e); }
   }
@@ -189,17 +228,15 @@
     document.getElementById('targetCurr').value = state.targetCurr;
     document.getElementById('currentRateVal').value = state.rateVal;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
-    document.getElementById('modalTargetCurrOption').value = state.targetCurr;
-    document.getElementById('modalTargetCurrOption').innerText = state.targetCurr;
-    document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white border px-2 py-0.5 rounded-full text-[10px]">${m}<button onclick="removeMember('${m}')" class="text-red-300 ml-1">×</button></div>`).join('');
+    document.getElementById('exCurr').innerHTML = `<option value="HKD">HKD</option><option value="${state.targetCurr}">${state.targetCurr}</option>`;
+    document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white border-2 border-gray-200 px-3 py-1 rounded-full text-[11px] font-bold">${m}<button onclick="removeMember('${m}')" class="text-red-400 ml-2">×</button></div>`).join('');
     renderTimeline(); calculateFinancials();
   }
 
-  // --- (其餘邏輯完全保持原樣) ---
   function renderTimeline() {
     const exps = state.expenses || [];
     const preExps = exps.filter(e => e.date === 'PRE');
-    document.getElementById('preTripContainer').innerHTML = preExps.map(e => itemHtml(e)).join('') || '<p class="text-center py-2 text-[10px] opacity-20 italic">No pre-trip records</p>';
+    document.getElementById('preTripContainer').innerHTML = preExps.map(e => itemHtml(e)).join('') || '<p class="text-center py-2 text-[11px] opacity-30 italic">No records</p>';
     let h = '';
     const start = new Date(state.startDate); const end = new Date(state.endDate);
     if (state.startDate && state.endDate && start <= end) {
@@ -207,16 +244,16 @@
         while (d <= end) {
             const ds = d.toISOString().split('T')[0];
             const dayExps = exps.filter(e => e.date === ds);
-            h += `<div class="mb-6"><div class="flex justify-between items-end mb-2"><p class="serif text-xl">Day ${dayCount}</p><p class="text-[9px] opacity-30 font-bold uppercase">${ds}</p></div><div class="space-y-2">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-2 text-[10px] font-bold text-blue-600 uppercase">+ ADD TO DAY ${dayCount}</button></div>`;
+            h += `<div class="mb-8"><div class="flex justify-between items-end mb-3"><p class="serif text-2xl font-bold">Day ${dayCount}</p><p class="text-[10px] opacity-40 font-bold uppercase tracking-widest">${ds}</p></div><div class="space-y-3">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-3 text-[11px] font-bold text-blue-600 uppercase bg-blue-50 w-full py-4 rounded-xl shadow-sm">+ Add Record</button></div>`;
             d.setDate(d.getDate() + 1); dayCount++;
         }
     }
     document.getElementById('timelineContainer').innerHTML = h;
   }
   function itemHtml(e) {
-    return `<div class="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl ${e.settled?'settled':''}">
-        <div class="flex items-center gap-2"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')" class="w-4 h-4"><div class="text-xs"><b>${e.desc}</b> (${e.curr}${e.amt})<br><span class="opacity-50 text-[10px] font-bold uppercase">${e.isPool?'🟡 Common Pool':e.payer}</span></div></div>
-        <button onclick="deleteExp('${e.id}')" class="text-gray-300">×</button></div>`;
+    return `<div class="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-sm ${e.settled?'settled':''}">
+        <div class="flex items-center gap-3"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')"><div class="text-sm"><b>${e.desc}</b> (${e.curr}${e.amt})<br><span class="opacity-50 text-[10px] font-bold uppercase">${e.isPool?'🟡 Common Pool':e.payer}</span></div></div>
+        <button onclick="deleteExp('${e.id}')" class="text-gray-300 text-xl px-2">×</button></div>`;
   }
   function calculateFinancials() {
     const members = state.members || [];
@@ -235,10 +272,10 @@
         }
     });
     document.getElementById('commonPoolInfo').innerText = `${state.targetCurr} ${Math.round(poolBalance)}`;
-    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white p-2 border rounded flex justify-between"><span>+ ${d.curr} ${d.amt}</span><button onclick="deleteDeposit(${d.id})" class="text-red-200">×</button></div>`).join('');
+    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[10px] bg-white p-3 border rounded-xl flex justify-between shadow-sm"><span>+ ${d.curr} ${d.amt}</span><button onclick="deleteDeposit(${d.id})" class="text-red-300 font-bold px-2">×</button></div>`).join('');
     document.getElementById('calculationTable').innerHTML = members.map(m => {
         const netHKD = (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD;
-        return `<tr class="border-b"><td class="p-2 font-bold">${m}</td><td class="p-2 text-right text-gray-500">${calc[m].paidHKD.toFixed(0)}</td><td class="p-2 text-right text-gray-500">${calc[m].paidTarget.toFixed(0)}</td><td class="p-2 text-right font-bold ${netHKD>=0?'text-green-600':'text-orange-600'}">${netHKD>0?'+':''}${netHKD.toFixed(0)}</td></tr>`;
+        return `<tr class="border-b border-gray-50"><td class="p-3 font-bold">${m}</td><td class="p-3 text-right text-gray-500">${calc[m].paidHKD.toFixed(0)}</td><td class="p-3 text-right text-gray-500">${calc[m].paidTarget.toFixed(0)}</td><td class="p-3 text-right font-bold ${netHKD>=0?'text-green-600':'text-orange-600'}">${netHKD>0?'+':''}${netHKD.toFixed(0)}</td></tr>`;
     }).join('');
     let netA = members.map(m => ({ name: m, bal: (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD }));
     let creditors = netA.filter(x => x.bal > 0.5).sort((a,b) => b.bal - a.bal);
@@ -246,7 +283,7 @@
     let tHtml = '';
     while(debtors.length && creditors.length) {
         let amt = Math.min(Math.abs(debtors[0].bal), creditors[0].bal);
-        tHtml += `<div class="text-[11px] flex justify-between p-3 bg-white rounded-xl border border-gray-100"><span><b>${debtors[0].name}</b> ➔ <b>${creditors[0].name}</b></span><span class="text-red-600 font-bold">HKD ${Math.round(amt)}</span></div>`;
+        tHtml += `<div class="text-xs flex justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"><span><b>${debtors[0].name}</b> ➔ <b>${creditors[0].name}</b></span><span class="text-red-600 font-bold">HKD ${Math.round(amt)}</span></div>`;
         debtors[0].bal += amt; creditors[0].bal -= amt;
         if (Math.abs(debtors[0].bal) < 0.5) debtors.shift();
         if (creditors[0].bal < 0.5) creditors.shift();
@@ -257,7 +294,7 @@
     const isDep = (date === 'DEPOSIT');
     document.getElementById('modalTitle').innerText = isDep ? 'Top-up Pool' : 'New Record';
     document.getElementById('exDate').value = date || 'PRE';
-    document.getElementById('exDesc').classList.toggle('hidden', isDep);
+    document.getElementById('exDesc').parentElement.classList.toggle('hidden', isDep);
     document.getElementById('payerSection').classList.toggle('hidden', isDep);
     document.getElementById('modal').classList.remove('hidden');
     togglePoolPayer(false);
@@ -267,7 +304,7 @@
   function togglePoolPayer(isPool) {
     document.getElementById('personalPayerFields').style.display = isPool ? 'none' : 'grid';
     document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${m}">${m}</option>`).join('');
-    document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 mb-2"><input type="checkbox" value="${m}" checked class="w-4 h-4"> ${m}</label>`).join('');
+    document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-4"><input type="checkbox" value="${m}" checked> <span class="text-sm font-semibold">${m}</span></label>`).join('');
   }
   function saveRecord() {
     const amt = parseFloat(document.getElementById('exAmt').value);
@@ -283,7 +320,7 @@
     document.getElementById('exAmt').value = ''; document.getElementById('exDesc').value = '';
   }
   function addMember() { const n = prompt("Name?"); if(n) { state.members.push(n); saveAll(); syncUI(); } }
-  function removeMember(n) { state.members = state.members.filter(m => m !== n); saveAll(); syncUI(); }
+  function removeMember(n) { if(confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); syncUI(); } }
   function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); syncUI(); }
   function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); syncUI(); }
   function toggleSettled(id) { const e = state.expenses.find(x => x.id == id); if(e) e.settled = !e.settled; saveAll(); syncUI(); }
@@ -292,5 +329,4 @@
   init();
 </script>
 </body>
-
 </html>
