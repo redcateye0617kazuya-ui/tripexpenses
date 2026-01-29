@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>📜 Trip Ledger - Bankin' Style</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
     
@@ -254,12 +256,41 @@
   </div>
 
 <script>
-  let trips = JSON.parse(localStorage.getItem('tripLedger_all') || '[{"id":1,"name":"New Trip"}]');
-  let currentTripId = parseInt(localStorage.getItem('tripLedger_currentId') || '1');
+  // --- Firebase 配置 ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyB_ni1Eypuaq1axtilczSo8gjdZk7_Rge4",
+    authDomain: "trip-planner-813fe.firebaseapp.com",
+    databaseURL: "https://trip-planner-813fe-default-rtdb.firebaseio.com",
+    projectId: "trip-planner-813fe",
+    storageBucket: "trip-planner-813fe.firebasestorage.app",
+    messagingSenderId: "606499488470",
+    appId: "1:606499488470:web:e744bc3964fa4a54ae7f77",
+    measurementId: "G-CTQHRMRTK2"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const dbRef = db.ref('tripLedgerData');
+
+  let trips = [];
+  let currentTripId = localStorage.getItem('tripLedger_currentId') || 'default';
   let state = {};
 
+  dbRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+        trips = data.trips || [];
+        currentTripId = data.currentTripId || currentTripId;
+        init();
+    } else {
+        trips = [{ id: Date.now(), name: "New Trip", members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }];
+        saveToFirebase();
+    }
+  });
+
   function init() {
-    let currentTrip = trips.find(t => t.id === currentTripId) || trips[0];
+    let currentTrip = trips.find(t => t.id == currentTripId) || trips[0];
+    if (!currentTrip) return;
     currentTripId = currentTrip.id;
     state = { tripName: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3, ...currentTrip };
     renderTabs(); syncUI();
@@ -268,23 +299,23 @@
   function renderTabs() {
     const container = document.getElementById('tabContainer');
     container.innerHTML = trips.map(t => {
-      const displayTitle = (t.id === currentTripId) ? (state.tripName || 'Untitled') : (t.name || 'Untitled');
-      return `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id === currentTripId ? 'active' : ''}">${displayTitle}</div>`;
+      const displayTitle = (t.id == currentTripId) ? (state.tripName || 'Untitled') : (t.name || 'Untitled');
+      return `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${displayTitle}</div>`;
     }).join('');
-    localStorage.setItem('tripLedger_currentId', currentTripId);
   }
 
-  function switchTrip(id) { saveAll(); currentTripId = id; init(); }
-  function addNewTrip() { saveAll(); const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; init(); }
-  function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id !== currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_all', JSON.stringify(trips)); init(); } }
+  function switchTrip(id) { currentTripId = id; localStorage.setItem('tripLedger_currentId', id); saveToFirebase(); }
+  function addNewTrip() { const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; saveToFirebase(); }
+  function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id != currentTripId); currentTripId = trips[0].id; saveToFirebase(); } }
 
-  // 新增 Reset 功能
   function resetAllData() {
-    if (confirm("🚨 WARNING: This will permanently delete ALL trips and settings. Are you sure?")) {
-      localStorage.clear();
+    if (confirm("🚨 WARNING: This will permanently delete ALL cloud data. Are you sure?")) {
+      dbRef.set(null);
       window.location.reload();
     }
   }
+
+  function saveToFirebase() { dbRef.set({ trips: trips, currentTripId: currentTripId }); }
 
   function saveAll() {
     state.tripName = document.getElementById('tripName').value;
@@ -292,11 +323,9 @@
     state.endDate = document.getElementById('endDate').value;
     state.targetCurr = document.getElementById('targetCurr').value;
     state.rateVal = parseFloat(document.getElementById('currentRateVal').value) || 1;
-    const idx = trips.findIndex(t => t.id === currentTripId);
+    const idx = trips.findIndex(t => t.id == currentTripId);
     if (idx !== -1) trips[idx] = { ...state };
-    localStorage.setItem('tripLedger_all', JSON.stringify(trips));
-    renderTabs();
-    syncUI();
+    saveToFirebase();
   }
 
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
@@ -307,7 +336,7 @@
         if (data && data.rates[state.targetCurr]) {
             state.rateVal = parseFloat(data.rates[state.targetCurr].toFixed(4));
             document.getElementById('currentRateVal').value = state.rateVal;
-            saveAll(); syncUI();
+            saveAll();
         }
     } catch (e) { console.error(e); }
   }
@@ -315,11 +344,11 @@
   function toHKD(amt, curr) { return curr === 'HKD' ? amt : amt / state.rateVal; }
 
   function syncUI() {
-    document.getElementById('tripName').value = state.tripName;
+    document.getElementById('tripName').value = state.tripName || '';
     document.getElementById('startDate').value = state.startDate || '';
     document.getElementById('endDate').value = state.endDate || '';
-    document.getElementById('targetCurr').value = state.targetCurr;
-    document.getElementById('currentRateVal').value = state.rateVal;
+    document.getElementById('targetCurr').value = state.targetCurr || 'JPY';
+    document.getElementById('currentRateVal').value = state.rateVal || 1;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
     document.getElementById('exCurr').innerHTML = `<option value="HKD">HKD</option><option value="${state.targetCurr}">${state.targetCurr}</option>`;
     document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${m}<button onclick="removeMember('${m}')" class="text-red-300">×</button></div>`).join('');
@@ -336,9 +365,8 @@
         let d = new Date(start); let dayCount = 1;
         while (d <= end) {
             const ds = d.toISOString().split('T')[0];
-            const displayDate = ds.replace(/-/g, '/');
             const dayExps = exps.filter(e => e.date === ds);
-            h += `<div class="mb-8"><div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${dayCount}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${displayDate}</p></div><div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button></div>`;
+            h += `<div class="mb-8"><div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${dayCount}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${ds.replace(/-/g, '/')}</p></div><div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div><button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button></div>`;
             d.setDate(d.getDate() + 1); dayCount++;
         }
     }
@@ -425,17 +453,16 @@
         const split = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value);
         state.expenses.push({ id: Date.now(), date: selectedDate, desc: document.getElementById('exDesc').value || 'Expense', amt, curr, payer: document.getElementById('exPayer').value, splitWith: split, isPool: document.getElementById('usePool').checked });
     }
-    closeModal(); saveAll(); syncUI();
+    closeModal(); saveAll();
     document.getElementById('exAmt').value = ''; document.getElementById('exDesc').value = '';
   }
-  function addMember() { const n = prompt("Name?"); if(n) { state.members.push(n); saveAll(); syncUI(); } }
-  function removeMember(n) { if(confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); syncUI(); } }
-  function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); syncUI(); }
-  function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); syncUI(); }
-  function toggleSettled(id) { const e = state.expenses.find(x => x.id == id); if(e) e.settled = !e.settled; saveAll(); syncUI(); }
+  function addMember() { const n = prompt("Name?"); if(n) { state.members.push(n); saveAll(); } }
+  function removeMember(n) { if(confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); } }
+  function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); }
+  function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); }
+  function toggleSettled(id) { const e = state.expenses.find(x => x.id == id); if(e) e.settled = !e.settled; saveAll(); }
   function copySummary() { navigator.clipboard.writeText(document.getElementById('transferList').innerText); alert("Copied!"); }
 
-  init();
 </script>
 </body>
 </html>
