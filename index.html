@@ -216,7 +216,7 @@
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 id="modalTitle" class="serif text-2xl mb-8 text-center font-bold">Record</h3>
         <input type="hidden" id="exDate">
-        <div class="space-y-6">
+        <input type="hidden" id="exId"> <div class="space-y-6">
             <div>
                 <p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Description</p>
                 <input id="exDesc" type="text" placeholder="What's this for?">
@@ -256,7 +256,6 @@
   </div>
 
 <script>
-  // --- Firebase 配置 ---
   const firebaseConfig = {
     apiKey: "AIzaSyB_ni1Eypuaq1axtilczSo8gjdZk7_Rge4",
     authDomain: "trip-planner-813fe.firebaseapp.com",
@@ -299,8 +298,9 @@
   function renderTabs() {
     const container = document.getElementById('tabContainer');
     container.innerHTML = trips.map(t => {
-      const displayTitle = (t.id == currentTripId) ? (state.tripName || 'Untitled') : (t.name || 'Untitled');
-      return `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${displayTitle}</div>`;
+      // 顯示邏輯：如果這個 Tab 是目前選中的，則顯示當前輸入框的文字；否則顯示儲存的名稱
+      const nameToShow = (t.id == currentTripId) ? (state.tripName || 'Untitled') : (t.name || 'Untitled');
+      return `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${nameToShow}</div>`;
     }).join('');
   }
 
@@ -323,9 +323,13 @@
     state.endDate = document.getElementById('endDate').value;
     state.targetCurr = document.getElementById('targetCurr').value;
     state.rateVal = parseFloat(document.getElementById('currentRateVal').value) || 1;
+    
+    // 同步更新 trips 陣列，確保 Tab 能正確預覽
     const idx = trips.findIndex(t => t.id == currentTripId);
-    if (idx !== -1) trips[idx] = { ...state };
+    if (idx !== -1) trips[idx] = { ...state, name: state.tripName }; 
+
     saveToFirebase();
+    renderTabs(); // 打字時即時更新上方 Tags 的文字
   }
 
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
@@ -382,7 +386,10 @@
                 <p class="text-[10px] opacity-60 font-bold uppercase tracking-tight">${e.isPool?'🟡 Pool':e.payer} • ${e.curr} ${e.amt}</p>
             </div>
         </div>
-        <button onclick="deleteExp('${e.id}')" class="text-gray-300 px-2 text-xl">×</button></div>`;
+        <div class="flex items-center gap-3">
+            <button onclick="editExpense('${e.id}')" class="text-blue-400 font-bold text-xs">✎</button>
+            <button onclick="deleteExp('${e.id}')" class="text-gray-300 px-2 text-xl">×</button>
+        </div></div>`;
   }
 
   function calculateFinancials() {
@@ -402,7 +409,14 @@
         }
     });
     document.getElementById('commonPoolInfo').innerText = Math.round(poolBalance).toLocaleString();
-    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between"><span>+ ${d.curr} ${d.amt}</span><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div>`).join('');
+    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `
+        <div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center">
+            <span>+ ${d.curr} ${d.amt}</span>
+            <div class="flex items-center gap-2">
+                <button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button>
+                <button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button>
+            </div>
+        </div>`).join('');
     
     document.getElementById('calculationTable').innerHTML = members.map(m => {
         const totalPaidInHKD = calc[m].paidHKD + (calc[m].paidTarget / state.rateVal);
@@ -431,11 +445,48 @@
     const isDep = (date === 'DEPOSIT');
     document.getElementById('modalTitle').innerText = isDep ? 'Deposit Pool' : 'New Record';
     document.getElementById('exDate').value = date || 'PRE';
+    document.getElementById('exId').value = ''; // 預設空，表示新增
     document.getElementById('exDesc').parentElement.classList.toggle('hidden', isDep);
     document.getElementById('payerSection').classList.toggle('hidden', isDep);
     document.getElementById('modal').classList.remove('hidden');
+    // 清空欄位
+    document.getElementById('exDesc').value = '';
+    document.getElementById('exAmt').value = '';
     togglePoolPayer(false);
   }
+
+  // 編輯支出
+  function editExpense(id) {
+    const exp = state.expenses.find(x => x.id == id);
+    if (!exp) return;
+    openModal(exp.date);
+    document.getElementById('modalTitle').innerText = 'Edit Record';
+    document.getElementById('exId').value = exp.id;
+    document.getElementById('exDesc').value = exp.desc;
+    document.getElementById('exAmt').value = exp.amt;
+    document.getElementById('exCurr').value = exp.curr;
+    document.getElementById('usePool').checked = exp.isPool;
+    togglePoolPayer(exp.isPool);
+    if (!exp.isPool) {
+        document.getElementById('exPayer').value = exp.payer;
+        // 勾選分錢人
+        document.querySelectorAll('#modalSplit input').forEach(input => {
+            input.checked = exp.splitWith.includes(input.value);
+        });
+    }
+  }
+
+  // 編輯存款
+  function editDeposit(id) {
+    const dep = state.poolDeposits.find(x => x.id == id);
+    if (!dep) return;
+    openModal('DEPOSIT');
+    document.getElementById('modalTitle').innerText = 'Edit Deposit';
+    document.getElementById('exId').value = dep.id;
+    document.getElementById('exAmt').value = dep.amt;
+    document.getElementById('exCurr').value = dep.curr;
+  }
+
   function openDepositModal() { openModal('DEPOSIT'); }
   function closeModal() { document.getElementById('modal').classList.add('hidden'); }
   function togglePoolPayer(isPool) {
@@ -443,19 +494,43 @@
     document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${m}">${m}</option>`).join('');
     document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${m}" checked> <span class="text-xs font-bold">${m}</span></label>`).join('');
   }
+
   function saveRecord() {
     const amt = parseFloat(document.getElementById('exAmt').value);
     const curr = document.getElementById('exCurr').value;
     const selectedDate = document.getElementById('exDate').value;
+    const existingId = document.getElementById('exId').value;
     if (!amt) return;
-    if (selectedDate === 'DEPOSIT') { state.poolDeposits.push({ id: Date.now(), amt, curr }); }
-    else {
+
+    if (selectedDate === 'DEPOSIT') {
+        if (existingId) {
+            const idx = state.poolDeposits.findIndex(d => d.id == existingId);
+            state.poolDeposits[idx] = { ...state.poolDeposits[idx], amt, curr };
+        } else {
+            state.poolDeposits.push({ id: Date.now(), amt, curr });
+        }
+    } else {
         const split = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value);
-        state.expenses.push({ id: Date.now(), date: selectedDate, desc: document.getElementById('exDesc').value || 'Expense', amt, curr, payer: document.getElementById('exPayer').value, splitWith: split, isPool: document.getElementById('usePool').checked });
+        const record = { 
+            id: existingId ? parseInt(existingId) : Date.now(), 
+            date: selectedDate, 
+            desc: document.getElementById('exDesc').value || 'Expense', 
+            amt, curr, 
+            payer: document.getElementById('exPayer').value, 
+            splitWith: split, 
+            isPool: document.getElementById('usePool').checked 
+        };
+        
+        if (existingId) {
+            const idx = state.expenses.findIndex(e => e.id == existingId);
+            state.expenses[idx] = { ...state.expenses[idx], ...record };
+        } else {
+            state.expenses.push(record);
+        }
     }
     closeModal(); saveAll();
-    document.getElementById('exAmt').value = ''; document.getElementById('exDesc').value = '';
   }
+
   function addMember() { const n = prompt("Name?"); if(n) { state.members.push(n); saveAll(); } }
   function removeMember(n) { if(confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); } }
   function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); }
