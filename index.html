@@ -71,9 +71,17 @@
         <section id="settlementArea" class="mt-8 pt-8">
             <div class="app-card p-6 space-y-6">
                 <h3 class="serif text-2xl text-center font-bold">Settlement</h3>
-                <div class="overflow-hidden rounded-2xl border border-gray-100 bg-white/50">
-                    <table class="w-full text-left text-[11px]">
-                        <thead class="bg-gray-50/50 font-bold opacity-50"><tr><th class="p-3">NAME</th><th class="p-3 text-right">PAID(HK)</th><th class="p-3 text-right">PAID(<span class="target-curr-label">--</span>)</th><th class="p-3 text-right">NET</th></tr></thead>
+                <div class="overflow-x-auto rounded-2xl border border-gray-100 bg-white/50">
+                    <table class="w-full text-left text-[11px] min-w-[320px]">
+                        <thead class="bg-gray-50/50 font-bold opacity-50">
+                            <tr>
+                                <th class="p-3">NAME</th>
+                                <th class="p-3 text-right">HKD PAID</th>
+                                <th class="p-3 text-right">HKD NET</th>
+                                <th class="p-3 text-right"><span class="target-curr-label">--</span> PAID</th>
+                                <th class="p-3 text-right"><span class="target-curr-label">--</span> NET</th>
+                            </tr>
+                        </thead>
                         <tbody id="calculationTable" class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
@@ -162,7 +170,6 @@
     renderTabs(); 
   }
 
-  // Drag & Drop
   function handleDragStart(e, id) { e.dataTransfer.setData("text/plain", id); e.target.classList.add('dragging'); }
   function handleDragEnd(e) { e.target.classList.remove('dragging'); document.querySelectorAll('.drop-zone-active').forEach(el => el.classList.remove('drop-zone-active')); }
   function handleDrop(e, newDate) { e.preventDefault(); const id = e.dataTransfer.getData("text/plain"); const exp = state.expenses.find(x => x.id == id); if (exp && exp.date !== newDate) { exp.date = newDate; saveAll(); } }
@@ -174,7 +181,6 @@
     document.getElementById('targetCurr').value = state.targetCurr || 'JPY';
     document.getElementById('currentRateVal').value = state.rateVal || 1;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
-    // 更新 Modal 內的貨幣選項並將外幣設為預設
     document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
     document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${m}<button onclick="removeMember('${m}')" class="text-red-300">×</button></div>`).join('');
     renderTimeline(); calculateFinancials();
@@ -209,25 +215,48 @@
 
   function calculateFinancials() {
     const members = state.members || [];
-    const calc = {}; members.forEach(m => calc[m] = { paidHKD: 0, paidTarget: 0, costHKD: 0 });
-    let poolBal = 0; (state.poolDeposits || []).forEach(d => { poolBal += (d.curr === 'HKD' ? d.amt * state.rateVal : d.amt); });
+    const calc = {}; 
+    members.forEach(m => calc[m] = { paidHKD: 0, costHKD: 0, paidTarget: 0, costTarget: 0 });
+
+    let poolBalTG = 0; 
+    (state.poolDeposits || []).forEach(d => { 
+        poolBalTG += (d.curr === 'HKD' ? d.amt * state.rateVal : d.amt); 
+    });
+
     (state.expenses || []).filter(e => !e.settled).forEach(e => {
-        const hk = e.curr === 'HKD' ? e.amt : e.amt / state.rateVal;
-        const tg = e.curr === 'HKD' ? e.amt * state.rateVal : e.amt;
-        if (e.isPool) poolBal -= tg;
-        else {
-            if (e.curr === 'HKD') calc[e.payer].paidHKD += e.amt; else calc[e.payer].paidTarget += e.amt;
-            const share = hk / (e.splitWith.length || 1);
-            e.splitWith.forEach(m => { if(calc[m]) calc[m].costHKD += share; });
+        const share = e.amt / (e.splitWith.length || 1);
+        if (e.isPool) {
+            const tgAmt = e.curr === 'HKD' ? e.amt * state.rateVal : e.amt;
+            poolBalTG -= tgAmt;
+        } else {
+            if (e.curr === 'HKD') {
+                calc[e.payer].paidHKD += e.amt;
+                e.splitWith.forEach(m => { if(calc[m]) calc[m].costHKD += share; });
+            } else {
+                calc[e.payer].paidTarget += e.amt;
+                e.splitWith.forEach(m => { if(calc[m]) calc[m].costTarget += share; });
+            }
         }
     });
-    document.getElementById('commonPoolInfo').innerText = Math.round(poolBal).toLocaleString();
-    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center"><span>+ ${d.curr} ${d.amt}</span><div class="flex items-center gap-2"><button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div></div>`).join('');
+
+    document.getElementById('commonPoolInfo').innerText = Math.round(poolBalTG).toLocaleString();
+    
+    const netA = [];
     document.getElementById('calculationTable').innerHTML = members.map(m => {
-        const net = (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD;
-        return `<tr><td class="p-4 font-bold">${m}</td><td class="p-4 text-right opacity-60">${calc[m].paidHKD.toFixed(0)}</td><td class="p-4 text-right opacity-60">${calc[m].paidTarget.toFixed(0)}</td><td class="p-4 text-right font-bold ${net>=0?'text-green-700':'text-red-700'}">${net>0?'+':''}${net.toFixed(0)}</td></tr>`;
+        const netHK = calc[m].paidHKD - calc[m].costHKD;
+        const netTG = calc[m].paidTarget - calc[m].costTarget;
+        const totalNetHK = netHK + (netTG / state.rateVal);
+        netA.push({ name: m, bal: totalNetHK });
+
+        return `<tr>
+            <td class="p-4 font-bold">${m}</td>
+            <td class="p-4 text-right opacity-60">${calc[m].paidHKD.toFixed(0)}</td>
+            <td class="p-4 text-right font-bold ${netHK>=0?'text-green-700':'text-red-700'}">${netHK>0?'+':''}${netHK.toFixed(0)}</td>
+            <td class="p-4 text-right opacity-60">${calc[m].paidTarget.toFixed(0)}</td>
+            <td class="p-4 text-right font-bold ${netTG>=0?'text-green-700':'text-red-700'}">${netTG>0?'+':''}${netTG.toFixed(0)}</td>
+        </tr>`;
     }).join('');
-    let netA = members.map(m => ({ name: m, bal: (calc[m].paidHKD + (calc[m].paidTarget / state.rateVal)) - calc[m].costHKD }));
+
     let cr = netA.filter(x => x.bal > 0.5).sort((a,b) => b.bal - a.bal);
     let db = netA.filter(x => x.bal < -0.5).sort((a,b) => a.bal - b.bal);
     let tHtml = '';
@@ -238,36 +267,18 @@
         if (Math.abs(db[0].bal) < 0.5) db.shift(); if (cr[0].bal < 0.5) cr.shift();
     }
     document.getElementById('transferList').innerHTML = tHtml || '<p class="text-center py-4 opacity-20 italic">Settled</p>';
+    document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center"><span>+ ${d.curr} ${d.amt}</span><div class="flex items-center gap-2"><button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div></div>`).join('');
   }
 
-  function resetAllData() {
-    if (confirm(`🚨 RESET CURRENT TRIP? This will clear all members, expenses, and pool for "${state.name}". Other trips will be safe.`)) {
-        state.members = []; state.expenses = []; state.poolDeposits = []; saveAll();
-    }
-  }
-
-  function openModal(date) { 
-    const isD = (date === 'DEPOSIT'); 
-    document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; 
-    document.getElementById('exDate').value = date || 'PRE'; 
-    document.getElementById('exId').value = ''; 
-    document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); 
-    document.getElementById('payerSection').classList.toggle('hidden', isD); 
-    document.getElementById('modal').classList.remove('hidden'); 
-    document.getElementById('exDesc').value = ''; 
-    document.getElementById('exAmt').value = ''; 
-    // 打開 Modal 時，預設選擇外幣 (即第一個 Option)
-    document.getElementById('exCurr').value = state.targetCurr; 
-    togglePoolPayer(false); 
-  }
-
+  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; saveAll(); } }
+  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; togglePoolPayer(false); }
   function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = e.splitWith.includes(i.value)); } }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
   function openDepositModal() { openModal('DEPOSIT'); }
   function closeModal() { document.getElementById('modal').classList.add('hidden'); }
   function togglePoolPayer(isP) { document.getElementById('personalPayerFields').style.display = isP ? 'none' : 'grid'; document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${m}">${m}</option>`).join(''); document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${m}" checked> <span class="text-xs font-bold">${m}</span></label>`).join(''); }
   function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
-  function addNewTrip() { const newId = Date.now(); const nt = { id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }; trips.push(nt); currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId); dbPath.set(trips); }
+  function addNewTrip() { const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId); dbPath.set(trips); }
   function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id != currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_currentId', currentTripId); dbPath.set(trips); } }
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
   async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); } } catch (e) {} }
