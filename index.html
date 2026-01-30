@@ -68,6 +68,7 @@
             <div id="preTripContainer" class="space-y-3"></div>
         </section>
         <div id="timelineContainer" class="space-y-8"></div>
+        
         <section id="settlementArea" class="mt-8 pt-8">
             <div class="app-card p-6 space-y-6">
                 <h3 class="serif text-2xl text-center font-bold">Settlement</h3>
@@ -76,10 +77,10 @@
                         <thead class="bg-gray-50/50 font-bold opacity-50">
                             <tr>
                                 <th class="p-3">NAME</th>
-                                <th class="p-3 text-right">HKD PAID</th>
-                                <th class="p-3 text-right">HKD NET</th>
-                                <th class="p-3 text-right"><span class="target-curr-label">--</span> PAID</th>
-                                <th class="p-3 text-right"><span class="target-curr-label">--</span> NET</th>
+                                <th class="p-3 text-right">HKD</th>
+                                <th class="p-3 text-right whitespace-nowrap">HKD ±</th>
+                                <th class="p-3 text-right"><span class="target-curr-label">--</span></th>
+                                <th class="p-3 text-right whitespace-nowrap"><span class="target-curr-label">--</span> ±</th>
                             </tr>
                         </thead>
                         <tbody id="calculationTable" class="divide-y divide-gray-100"></tbody>
@@ -251,9 +252,9 @@
         return `<tr>
             <td class="p-4 font-bold">${m}</td>
             <td class="p-4 text-right opacity-60">${calc[m].paidHKD.toFixed(0)}</td>
-            <td class="p-4 text-right font-bold ${netHK>=0?'text-green-700':'text-red-700'}">${netHK>0?'+':''}${netHK.toFixed(0)}</td>
+            <td class="p-4 text-right font-bold whitespace-nowrap ${netHK>=0?'text-green-700':'text-red-700'}">${netHK>0?'+':''}${netHK.toFixed(0)}</td>
             <td class="p-4 text-right opacity-60">${calc[m].paidTarget.toFixed(0)}</td>
-            <td class="p-4 text-right font-bold ${netTG>=0?'text-green-700':'text-red-700'}">${netTG>0?'+':''}${netTG.toFixed(0)}</td>
+            <td class="p-4 text-right font-bold whitespace-nowrap ${netTG>=0?'text-green-700':'text-red-700'}">${netTG>0?'+':''}${netTG.toFixed(0)}</td>
         </tr>`;
     }).join('');
 
