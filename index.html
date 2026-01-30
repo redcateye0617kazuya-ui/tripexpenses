@@ -174,7 +174,8 @@
     document.getElementById('targetCurr').value = state.targetCurr || 'JPY';
     document.getElementById('currentRateVal').value = state.rateVal || 1;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
-    document.getElementById('exCurr').innerHTML = `<option value="HKD">HKD</option><option value="${state.targetCurr}">${state.targetCurr}</option>`;
+    // 更新 Modal 內的貨幣選項並將外幣設為預設
+    document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
     document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${m}<button onclick="removeMember('${m}')" class="text-red-300">×</button></div>`).join('');
     renderTimeline(); calculateFinancials();
   }
@@ -239,17 +240,27 @@
     document.getElementById('transferList').innerHTML = tHtml || '<p class="text-center py-4 opacity-20 italic">Settled</p>';
   }
 
-  // --- Reset All Data (只針對目前的 Trip) ---
   function resetAllData() {
     if (confirm(`🚨 RESET CURRENT TRIP? This will clear all members, expenses, and pool for "${state.name}". Other trips will be safe.`)) {
-        state.members = [];
-        state.expenses = [];
-        state.poolDeposits = [];
-        saveAll();
+        state.members = []; state.expenses = []; state.poolDeposits = []; saveAll();
     }
   }
 
-  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; togglePoolPayer(false); }
+  function openModal(date) { 
+    const isD = (date === 'DEPOSIT'); 
+    document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; 
+    document.getElementById('exDate').value = date || 'PRE'; 
+    document.getElementById('exId').value = ''; 
+    document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); 
+    document.getElementById('payerSection').classList.toggle('hidden', isD); 
+    document.getElementById('modal').classList.remove('hidden'); 
+    document.getElementById('exDesc').value = ''; 
+    document.getElementById('exAmt').value = ''; 
+    // 打開 Modal 時，預設選擇外幣 (即第一個 Option)
+    document.getElementById('exCurr').value = state.targetCurr; 
+    togglePoolPayer(false); 
+  }
+
   function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = e.splitWith.includes(i.value)); } }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
   function openDepositModal() { openModal('DEPOSIT'); }
