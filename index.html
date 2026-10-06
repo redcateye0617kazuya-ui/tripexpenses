@@ -26,6 +26,18 @@
     .pool-box { background: #dfd8cf; border-radius: 28px; }
     .dragging { opacity: 0.5; transform: scale(0.95); }
     .drop-zone-active { background: rgba(109, 93, 81, 0.1); border-radius: 28px; }
+    .view-tab { padding: 10px 0; border-radius: 9999px; font-size: 12px; font-weight: 700; color: #8c8279; opacity: 0.7; }
+    .view-tab.active { background: white; color: var(--main-brown); opacity: 1; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .cal-cell { min-height: 58px; border-radius: 14px; padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; border: 2px solid transparent; }
+    .cal-cell.in-trip { background: var(--bg-cream); }
+    .cal-cell.selected { border-color: var(--main-brown); }
+    .cal-cell.today .cal-num { background: var(--accent-tan); }
+    .cal-num { font-size: 11px; font-weight: 700; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; }
+    .plan-mark { font-size: 9px; line-height: 1; }
+    .seg-btn { flex: 1; padding: 12px; border-radius: 16px; font-size: 13px; font-weight: 700; background: white; opacity: 0.5; }
+    .seg-btn.active { background: var(--main-brown); color: white; opacity: 1; }
+    input[type="time"] { background: #ffffff; border-radius: 20px; padding: 14px 18px; font-size: 16px !important; color: var(--main-brown); width: 100%; border: none; text-align: center; }
+    #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
 </head>
 <body class="p-0">
@@ -49,6 +61,10 @@
           <input id="currentRateVal" type="number" step="0.001" onchange="saveAll()" class="!w-24 !p-1 !bg-transparent text-right font-bold text-lg">
           <button onclick="fetchLiveRate()" class="text-[9px] bg-white px-3 py-2 rounded-full font-bold shadow-sm">Live</button>
       </div>
+      <div class="flex bg-white/40 p-1 rounded-full">
+          <button id="viewTabLedger" onclick="setView('ledger')" class="view-tab flex-1 active">💰 Ledger</button>
+          <button id="viewTabCalendar" onclick="setView('calendar')" class="view-tab flex-1">📅 Calendar</button>
+      </div>
     </div>
 
     <div class="flex-1 p-6 space-y-8">
@@ -56,6 +72,7 @@
             <div id="memberList" class="flex flex-wrap gap-2 px-2"></div>
             <button onclick="addMember()" class="w-10 h-10 bg-white rounded-full text-lg shadow-sm">+</button>
         </div>
+        <div id="ledgerView" class="space-y-8">
         <section class="pool-box p-6 shadow-inner">
             <div class="flex justify-between items-start mb-4">
                 <div><p class="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Common Pool (<span class="target-curr-label">---</span>)</p><div id="commonPoolInfo" class="text-4xl font-bold tracking-tighter">0</div></div>
@@ -94,6 +111,23 @@
                 </div>
             </div>
         </section>
+        </div>
+
+        <div id="calendarView" class="hidden space-y-6">
+            <div id="arrivalSummary"></div>
+            <div class="app-card p-4 space-y-3">
+                <div class="flex justify-between items-center px-1">
+                    <button onclick="shiftCalMonth(-1)" class="w-9 h-9 rounded-full bg-[#f1ede4] font-bold">‹</button>
+                    <p id="calMonthLabel" class="serif text-xl font-bold"></p>
+                    <button onclick="shiftCalMonth(1)" class="w-9 h-9 rounded-full bg-[#f1ede4] font-bold">›</button>
+                </div>
+                <div id="calFilter" class="flex flex-wrap gap-2 justify-center"></div>
+                <div class="grid grid-cols-7 gap-1 text-center text-[9px] font-bold opacity-40"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
+                <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
+                <p class="text-[9px] text-center opacity-40 font-bold">✈ Arrive &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
+            </div>
+            <div id="calDayDetail"></div>
+        </div>
         <div class="h-20"></div>
     </div>
   </main>
@@ -115,6 +149,22 @@
             </div>
         </div>
         <div class="flex gap-4 mt-10 pb-4"><button onclick="closeModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="saveRecord()" class="flex-1 btn-primary">SAVE</button></div>
+    </div>
+  </div>
+
+  <div id="planModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end">
+    <div class="bg-[#f1ede4] w-full rounded-t-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
+        <h3 id="planModalTitle" class="serif text-2xl mb-8 text-center font-bold">Plan</h3>
+        <input type="hidden" id="planId">
+        <div class="space-y-6">
+            <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">✈ Arrive</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
+            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who</p><select id="planMember"></select></div>
+            <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
+            <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
+            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Note</p><input id="planNote" type="text" placeholder="Optional"></div>
+        </div>
+        <div class="flex gap-4 mt-10 pb-4"><button onclick="closePlanModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="savePlan()" class="flex-1 btn-primary">SAVE</button></div>
     </div>
   </div>
 
@@ -148,12 +198,15 @@
     if(!state.members) state.members = [];
     if(!state.expenses) state.expenses = [];
     if(!state.poolDeposits) state.poolDeposits = [];
+    if(!state.plans) state.plans = [];
+    // Firebase drops empty arrays, so an expense saved with no splitees comes back without splitWith
+    state.expenses.forEach(e => { if (!e.splitWith) e.splitWith = []; });
     renderTabs(); syncUI();
   }
 
   function renderTabs() {
     document.getElementById('tabContainer').innerHTML = trips.map(t => 
-      `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${t.name || 'Untitled'}</div>`
+      `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${esc(t.name || 'Untitled')}</div>`
     ).join('');
   }
 
@@ -183,19 +236,20 @@
     document.getElementById('currentRateVal').value = state.rateVal || 1;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
     document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
-    document.getElementById('memberList').innerHTML = (state.members || []).map(m => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${m}<button onclick="removeMember('${m}')" class="text-red-300">×</button></div>`).join('');
-    renderTimeline(); calculateFinancials();
+    document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300">×</button></div>`).join('');
+    renderTimeline(); calculateFinancials(); renderCalendar(); applyView();
   }
 
   function renderTimeline() {
     const exps = state.expenses || [];
     const preExps = exps.filter(e => e.date === 'PRE');
     document.getElementById('preTripContainer').innerHTML = preExps.map(e => itemHtml(e)).join('') || '<p class="text-center py-2 text-[11px] opacity-30 italic">No records</p>';
-    let h = ''; const start = new Date(state.startDate); const end = new Date(state.endDate);
-    if (state.startDate && state.endDate && start <= end) {
+    let h = ''; const start = parseYMD(state.startDate); const end = parseYMD(state.endDate);
+    const shownDates = new Set();
+    if (start && end && start <= end) {
         let d = new Date(start); let count = 1;
         while (d <= end) {
-            const ds = d.toISOString().split('T')[0];
+            const ds = fmtYMD(d); shownDates.add(ds);
             const dayExps = exps.filter(e => e.date === ds);
             h += `<div class="mb-8" ondragover="event.preventDefault(); this.classList.add('drop-zone-active')" ondragleave="this.classList.remove('drop-zone-active')" ondrop="handleDrop(event, '${ds}')">
                     <div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${count}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${ds.replace(/-/g, '/')}</p></div>
@@ -205,12 +259,21 @@
             d.setDate(d.getDate() + 1); count++;
         }
     }
+    // Records whose date is outside the trip range (e.g. after the dates were changed) still count in
+    // the settlement, so keep them visible instead of silently hiding them
+    const otherExps = exps.filter(e => e.date !== 'PRE' && !shownDates.has(e.date));
+    if (otherExps.length) {
+        h += `<div class="mb-8">
+                <div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Other Dates</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">Outside trip dates</p></div>
+                <div class="space-y-4">${otherExps.map(e => itemHtml(e, true)).join('')}</div>
+              </div>`;
+    }
     document.getElementById('timelineContainer').innerHTML = h;
   }
   
-  function itemHtml(e) {
+  function itemHtml(e, showDate) {
     return `<div class="app-card p-5 flex justify-between items-center ${e.settled?'settled':''}" draggable="true" ondragstart="handleDragStart(event, '${e.id}')" ondragend="handleDragEnd(event)">
-        <div class="flex items-center gap-4"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')"><div><p class="font-bold text-sm">${e.desc}</p><p class="text-[10px] opacity-60 font-bold uppercase tracking-tight">${e.isPool?'🟡 Pool':e.payer} • ${e.curr} ${e.amt}</p></div></div>
+        <div class="flex items-center gap-4"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')"><div><p class="font-bold text-sm">${esc(e.desc)}</p><p class="text-[10px] opacity-60 font-bold uppercase tracking-tight">${showDate ? esc(String(e.date).replace(/-/g, '/')) + ' • ' : ''}${e.isPool?'🟡 Pool':esc(e.payer)} • ${e.curr} ${e.amt}</p></div></div>
         <div class="flex items-center gap-3"><button onclick="editExpense('${e.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deleteExp('${e.id}')" class="text-gray-300 px-2 text-xl">×</button></div></div>`;
   }
 
@@ -225,17 +288,19 @@
     });
 
     (state.expenses || []).filter(e => !e.settled).forEach(e => {
-        const share = e.amt / (e.splitWith.length || 1);
+        const splitWith = e.splitWith || [];
+        const share = e.amt / (splitWith.length || 1);
         if (e.isPool) {
             const tgAmt = e.curr === 'HKD' ? e.amt * state.rateVal : e.amt;
             poolBalTG -= tgAmt;
         } else {
+            // payer may have been removed from members; don't crash the whole page
             if (e.curr === 'HKD') {
-                calc[e.payer].paidHKD += e.amt;
-                e.splitWith.forEach(m => { if(calc[m]) calc[m].costHKD += share; });
+                if (calc[e.payer]) calc[e.payer].paidHKD += e.amt;
+                splitWith.forEach(m => { if(calc[m]) calc[m].costHKD += share; });
             } else {
-                calc[e.payer].paidTarget += e.amt;
-                e.splitWith.forEach(m => { if(calc[m]) calc[m].costTarget += share; });
+                if (calc[e.payer]) calc[e.payer].paidTarget += e.amt;
+                splitWith.forEach(m => { if(calc[m]) calc[m].costTarget += share; });
             }
         }
     });
@@ -250,7 +315,7 @@
         netA.push({ name: m, bal: totalNetHK });
 
         return `<tr>
-            <td class="p-4 font-bold">${m}</td>
+            <td class="p-4 font-bold">${esc(m)}</td>
             <td class="p-4 text-right opacity-60">${calc[m].paidHKD.toFixed(0)}</td>
             <td class="p-4 text-right font-bold whitespace-nowrap ${netHK>=0?'text-green-700':'text-red-700'}">${netHK>0?'+':''}${netHK.toFixed(0)}</td>
             <td class="p-4 text-right opacity-60">${calc[m].paidTarget.toFixed(0)}</td>
@@ -263,7 +328,7 @@
     let tHtml = '';
     while(db.length && cr.length) {
         let amt = Math.min(Math.abs(db[0].bal), cr[0].bal);
-        tHtml += `<div class="p-4 bg-white rounded-[20px] flex justify-between items-center shadow-sm text-xs"><span><b>${db[0].name}</b> ➔ <b>${cr[0].name}</b></span><span class="font-bold text-red-700">HKD ${Math.round(amt)}</span></div>`;
+        tHtml += `<div class="p-4 bg-white rounded-[20px] flex justify-between items-center shadow-sm text-xs"><span><b>${esc(db[0].name)}</b> ➔ <b>${esc(cr[0].name)}</b></span><span class="font-bold text-red-700">HKD ${Math.round(amt)}</span></div>`;
         db[0].bal += amt; cr[0].bal -= amt;
         if (Math.abs(db[0].bal) < 0.5) db.shift(); if (cr[0].bal < 0.5) cr.shift();
     }
@@ -271,23 +336,158 @@
     document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center"><span>+ ${d.curr} ${d.amt}</span><div class="flex items-center gap-2"><button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div></div>`).join('');
   }
 
-  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; saveAll(); } }
-  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; togglePoolPayer(false); }
-  function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = e.splitWith.includes(i.value)); } }
+  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; saveAll(); } }
+  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; document.getElementById('usePool').checked = false; togglePoolPayer(false); }
+  function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = (e.splitWith || []).includes(i.value)); } }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
   function openDepositModal() { openModal('DEPOSIT'); }
   function closeModal() { document.getElementById('modal').classList.add('hidden'); }
-  function togglePoolPayer(isP) { document.getElementById('personalPayerFields').style.display = isP ? 'none' : 'grid'; document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${m}">${m}</option>`).join(''); document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${m}" checked> <span class="text-xs font-bold">${m}</span></label>`).join(''); }
-  function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
+  function togglePoolPayer(isP) { document.getElementById('personalPayerFields').style.display = isP ? 'none' : 'grid'; document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join(''); document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${esc(m)}" checked> <span class="text-xs font-bold">${esc(m)}</span></label>`).join(''); }
+  function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const isPool = document.getElementById('usePool').checked; if (!isPool && !document.getElementById('exPayer').value) { alert('Add a member first.'); return; } if (!isPool && !sw.length) { alert('Pick at least one splitee.'); return; } const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
   function addNewTrip() { const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId); dbPath.set(trips); }
   function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id != currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_currentId', currentTripId); dbPath.set(trips); } }
-  async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; await fetchLiveRate(); }
-  async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); } } catch (e) {} }
-  function addMember() { const n = prompt("Name?"); if(n) { state.members.push(n); saveAll(); } }
-  function removeMember(n) { if(confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); } }
+  async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; if (!(await fetchLiveRate())) saveAll(); }
+  async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); return true; } } catch (e) {} return false; }
+  function addMember() { const n = (prompt("Name?") || '').trim(); if(n) { if (state.members.includes(n)) { alert(`${n} already exists.`); return; } state.members.push(n); saveAll(); } }
+  function removeMember(i) { const n = state.members[i]; if(n !== undefined && confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); } }
   function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); }
   function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); }
   function toggleSettled(id) { const e = state.expenses.find(x => x.id == id); if(e) e.settled = !e.settled; saveAll(); }
+  function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  // Dates are handled as local calendar days ("YYYY-MM-DD") to avoid UTC/timezone shifts
+  function parseYMD(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+  function fmtYMD(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+  // ---------- View toggle ----------
+  let currentView = 'ledger';
+  try { currentView = localStorage.getItem('tripLedger_view') || 'ledger'; } catch (e) {}
+  function setView(v) { currentView = v; try { localStorage.setItem('tripLedger_view', v); } catch (e) {} applyView(); }
+  function applyView() {
+    const isCal = currentView === 'calendar';
+    document.getElementById('ledgerView').classList.toggle('hidden', isCal);
+    document.getElementById('calendarView').classList.toggle('hidden', !isCal);
+    document.querySelector('.jump-btn').style.display = isCal ? 'none' : 'flex';
+    document.getElementById('viewTabLedger').classList.toggle('active', !isCal);
+    document.getElementById('viewTabCalendar').classList.toggle('active', isCal);
+  }
+
+  // ---------- Calendar ----------
+  const MEMBER_COLORS = ['#c0846a', '#6f8fb3', '#7a9e7e', '#b38bb0', '#d1a54a', '#5fa3a0', '#c26d7e', '#8c7a6b'];
+  let calMonth = null, calSelected = null, calFilter = 'ALL', calTripId = null;
+  function memberColor(m) { const i = (state.members || []).indexOf(m); return i < 0 ? '#b5aca3' : MEMBER_COLORS[i % MEMBER_COLORS.length]; }
+  function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || (a.type === 'arrive' ? 0 : 1) - (b.type === 'arrive' ? 0 : 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
+  function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
+  function fmtShort(ds) { const d = parseYMD(ds); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ds; }
+
+  function renderCalendar() {
+    if (calTripId !== state.id) { calTripId = state.id; calMonth = null; calSelected = null; calFilter = 'ALL'; }
+    const start = parseYMD(state.startDate), end = parseYMD(state.endDate);
+    const hasRange = start && end && start <= end;
+    if (!calSelected) calSelected = fmtYMD(start || new Date());
+    if (!calMonth) { const base = parseYMD(calSelected); calMonth = new Date(base.getFullYear(), base.getMonth(), 1); }
+    if (calFilter !== 'ALL' && !(state.members || []).includes(calFilter)) calFilter = 'ALL';
+
+    const allPlans = (state.plans || []).slice().sort(sortPlans);
+    const plans = allPlans.filter(p => calFilter === 'ALL' || p.member === calFilter);
+    const byDate = {};
+    plans.forEach(p => (byDate[p.date] = byDate[p.date] || []).push(p));
+
+    // Arrival summary: where & when each person lands
+    const arrivals = allPlans.filter(p => p.type === 'arrive');
+    const members = state.members || [];
+    document.getElementById('arrivalSummary').innerHTML = members.length ? `<div class="app-card p-5 space-y-3">
+        <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">✈ Arrivals</p>
+        ${members.map(m => {
+            const mine = arrivals.filter(p => p.member === m);
+            return `<div class="flex items-start gap-3 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-16 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 space-y-1">${mine.length ? mine.map(p => `<p><span class="font-bold opacity-60">${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''}</span> · ${esc(p.place)}</p>`).join('') : '<p class="opacity-30 italic">Not set</p>'}</div></div>`;
+        }).join('')}
+      </div>` : '<p class="text-center py-2 text-[11px] opacity-40 italic">Add members (+ above) to start planning</p>';
+
+    // Filter chips
+    const chip = (key, label, color) => `<button onclick="setCalFilter(${key === 'ALL' ? "'ALL'" : members.indexOf(key)})" class="px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${calFilter === key ? 'bg-[#6d5d51] text-white' : 'bg-[#f1ede4]'}">${color ? `<span class="w-2 h-2 rounded-full" style="background:${color}"></span>` : ''}${esc(label)}</button>`;
+    document.getElementById('calFilter').innerHTML = members.length ? chip('ALL', 'All') + members.map(m => chip(m, m, memberColor(m))).join('') : '';
+
+    // Month grid
+    const y = calMonth.getFullYear(), mo = calMonth.getMonth();
+    document.getElementById('calMonthLabel').innerText = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const today = fmtYMD(new Date());
+    const days = new Date(y, mo + 1, 0).getDate();
+    let g = '';
+    for (let i = 0; i < new Date(y, mo, 1).getDay(); i++) g += '<div></div>';
+    for (let day = 1; day <= days; day++) {
+        const d = new Date(y, mo, day), ds = fmtYMD(d);
+        const inTrip = hasRange && d >= start && d <= end;
+        const marks = (byDate[ds] || []).map(p => `<span class="plan-mark" style="color:${memberColor(p.member)}">${p.type === 'arrive' ? '✈' : '●'}</span>`).join('');
+        g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
+                <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
+                <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
+              </div>`;
+    }
+    document.getElementById('calGrid').innerHTML = g;
+
+    // Selected day detail, grouped by person
+    const sel = parseYMD(calSelected);
+    const dayNo = hasRange && sel >= start && sel <= end ? Math.round((sel - start) / 86400000) + 1 : null;
+    const dayPlans = byDate[calSelected] || [];
+    const who = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...dayPlans.map(p => p.member)])];
+    const groups = who.map(m => ({ m, items: dayPlans.filter(p => p.member === m) })).filter(x => x.items.length);
+    document.getElementById('calDayDetail').innerHTML = `<div class="space-y-4">
+        <div class="flex justify-between items-end px-2"><p class="serif text-2xl font-bold">${dayNo ? 'Day ' + dayNo : sel.toLocaleDateString('en-US', { weekday: 'long' })}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${calSelected.replace(/-/g, '/')}</p></div>
+        ${groups.length ? groups.map(({ m, items }) => `<div class="app-card p-5 space-y-3">
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span><p class="font-bold text-sm">${esc(m)}</p></div>
+            ${items.map(p => `<div class="flex justify-between items-center gap-3">
+                <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '✈ Arrive · ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
+                ${p.time || p.note ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.time || '')}${p.time && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}</div>
+                <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
+              </div>`).join('')}
+          </div>`).join('') : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
+        <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
+      </div>`;
+  }
+  function shiftCalMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); }
+  function selectCalDay(ds) { calSelected = ds; renderCalendar(); }
+  function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (state.members[i] ?? 'ALL'); renderCalendar(); }
+
+  let planType = 'visit';
+  function setPlanType(t) {
+    planType = t;
+    document.getElementById('planTypeArrive').classList.toggle('active', t === 'arrive');
+    document.getElementById('planTypeVisit').classList.toggle('active', t === 'visit');
+    document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : 'Place';
+  }
+  function openPlanModal(id) {
+    if (!(state.members || []).length) { alert('Add a member first.'); return; }
+    const p = id ? (state.plans || []).find(x => x.id == id) : null;
+    if (id && !p) return;
+    const members = state.members.slice();
+    if (p && !members.includes(p.member)) members.push(p.member);
+    document.getElementById('planMember').innerHTML = members.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    document.getElementById('planModalTitle').innerText = p ? 'Edit Plan' : 'New Plan';
+    document.getElementById('planId').value = p ? p.id : '';
+    document.getElementById('planMember').value = p ? p.member : (calFilter !== 'ALL' ? calFilter : members[0]);
+    document.getElementById('planDate').value = p ? p.date : calSelected;
+    document.getElementById('planTime').value = p ? (p.time || '') : '';
+    document.getElementById('planPlace').value = p ? p.place : '';
+    document.getElementById('planNote').value = p ? (p.note || '') : '';
+    setPlanType(p ? p.type : 'visit');
+    document.getElementById('planModal').classList.remove('hidden');
+  }
+  function closePlanModal() { document.getElementById('planModal').classList.add('hidden'); }
+  function savePlan() {
+    const place = document.getElementById('planPlace').value.trim();
+    const date = document.getElementById('planDate').value;
+    if (!place) { alert('Where?'); return; }
+    if (!parseYMD(date)) { alert('Pick a date.'); return; }
+    const pid = document.getElementById('planId').value;
+    const rec = { id: pid ? parseInt(pid) : Date.now(), date, type: planType, member: document.getElementById('planMember').value, place, time: document.getElementById('planTime').value || '', note: document.getElementById('planNote').value.trim() };
+    if (!state.plans) state.plans = [];
+    const i = pid ? state.plans.findIndex(p => p.id == pid) : -1;
+    if (i !== -1) state.plans[i] = rec; else state.plans.push(rec);
+    calSelected = date; const d = parseYMD(date); calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+    closePlanModal(); saveAll(); renderCalendar();
+  }
+  function deletePlan(id) { const p = (state.plans || []).find(x => x.id == id); if (p && confirm(`Delete "${p.place}"?`)) { state.plans = state.plans.filter(x => x.id != id); saveAll(); renderCalendar(); } }
+
   function copySummary() { navigator.clipboard.writeText(document.getElementById('transferList').innerText); alert("Copied!"); }
 </script>
 </body>
