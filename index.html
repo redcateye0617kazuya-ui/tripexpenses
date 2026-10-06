@@ -163,6 +163,7 @@
         <input type="hidden" id="exDate"><input type="hidden" id="exId"> 
         <div class="space-y-6">
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Description</p><input id="exDesc" type="text" placeholder="What's this for?"></div>
+            <div id="exPlanRow" class="hidden"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Activity (optional)</p><select id="exPlan" onchange="onExpensePlanChange()"></select></div>
             <div class="flex gap-4"><div class="flex-1"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Amount</p><input id="exAmt" type="number" inputmode="decimal" placeholder="0.00"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Currency</p><select id="exCurr"></select></div></div>
             <div id="payerSection" class="space-y-6">
                 <div class="flex items-center gap-4 p-5 bg-white/50 rounded-3xl"><input type="checkbox" id="usePool" onchange="togglePoolPayer(this.checked)"><label for="usePool" class="text-sm font-bold">Paid by Common Pool?</label></div>
@@ -183,10 +184,11 @@
         <input type="hidden" id="planId">
         <div class="space-y-6">
             <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">✈ Arrive</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
-            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who</p><select id="planMember"></select></div>
+            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
             <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
             <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Note</p><input id="planNote" type="text" placeholder="Optional"></div>
+            <div id="planCostSection" class="hidden"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">💰 Spent on this activity</p><div id="planCostList" class="space-y-2"></div><button onclick="addExpenseForPlan()" class="mt-3 text-[11px] font-bold opacity-70 w-full py-3 rounded-[20px] bg-white/70">+ ADD EXPENSE FOR THIS ACTIVITY</button></div>
         </div>
         <div class="flex gap-4 mt-10 pb-4"><button onclick="closePlanModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="savePlan()" class="flex-1 btn-primary">SAVE</button></div>
         <button id="planDeleteBtn" onclick="deletePlanFromModal()" class="w-full text-[10px] text-red-400 opacity-60 font-bold pb-4">DELETE PLAN</button>
@@ -298,7 +300,7 @@
   
   function itemHtml(e, showDate) {
     return `<div class="app-card p-5 flex justify-between items-center ${e.settled?'settled':''}" draggable="true" ondragstart="handleDragStart(event, '${e.id}')" ondragend="handleDragEnd(event)">
-        <div class="flex items-center gap-4"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')"><div><p class="font-bold text-sm">${esc(e.desc)}</p><p class="text-[10px] opacity-60 font-bold uppercase tracking-tight">${showDate ? esc(String(e.date).replace(/-/g, '/')) + ' • ' : ''}${e.isPool?'🟡 Pool':esc(e.payer)} • ${e.curr} ${e.amt}</p></div></div>
+        <div class="flex items-center gap-4"><input type="checkbox" ${e.settled?'checked':''} onchange="toggleSettled('${e.id}')"><div><p class="font-bold text-sm">${esc(e.desc)}</p><p class="text-[10px] opacity-60 font-bold uppercase tracking-tight">${showDate ? esc(String(e.date).replace(/-/g, '/')) + ' • ' : ''}${e.isPool?'🟡 Pool':esc(e.payer)} • ${e.curr} ${e.amt}${planOf(e) ? ' • 📍 ' + esc(planOf(e).place) : ''}</p></div></div>
         <div class="flex items-center gap-3"><button onclick="editExpense('${e.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deleteExp('${e.id}')" class="text-gray-300 px-2 text-xl">×</button></div></div>`;
   }
 
@@ -362,13 +364,13 @@
   }
 
   function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; saveAll(); } }
-  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; document.getElementById('usePool').checked = false; togglePoolPayer(false); }
-  function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = (e.splitWith || []).includes(i.value)); } }
+  function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; document.getElementById('usePool').checked = false; togglePoolPayer(false); fillExpensePlanOptions(isD ? null : (date || 'PRE'), null); }
+  function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = (e.splitWith || []).includes(i.value)); } fillExpensePlanOptions(e.date, e.planId); }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
   function openDepositModal() { openModal('DEPOSIT'); }
   function closeModal() { document.getElementById('modal').classList.add('hidden'); }
   function togglePoolPayer(isP) { document.getElementById('personalPayerFields').style.display = isP ? 'none' : 'grid'; document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join(''); document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${esc(m)}" checked> <span class="text-xs font-bold">${esc(m)}</span></label>`).join(''); }
-  function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const isPool = document.getElementById('usePool').checked; if (!isPool && !document.getElementById('exPayer').value) { alert('Add a member first.'); return; } if (!isPool && !sw.length) { alert('Pick at least one splitee.'); return; } const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
+  function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const isPool = document.getElementById('usePool').checked; if (!isPool && !document.getElementById('exPayer').value) { alert('Add a member first.'); return; } if (!isPool && !sw.length) { alert('Pick at least one splitee.'); return; } const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; const planId = parseInt(document.getElementById('exPlan').value); if (planId && !document.getElementById('exPlanRow').classList.contains('hidden')) rec.planId = planId; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
   function addNewTrip() { const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId); dbPath.set(trips); }
   function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id != currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_currentId', currentTripId); dbPath.set(trips); } }
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; if (!(await fetchLiveRate())) saveAll(); }
@@ -438,6 +440,53 @@
   function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
   function fmtShort(ds) { const d = parseYMD(ds); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ds; }
 
+  // ---------- Activities: who's in them and what they cost ----------
+  function normPlace(s) { return String(s || '').trim().toLowerCase(); }
+  // Plans with the same type, day and place count as one activity (e.g. two friends both added "Osaka Castle")
+  function samePlanGroup(p) { return (state.plans || []).filter(q => q.type === p.type && q.date === p.date && normPlace(q.place) === normPlace(p.place)); }
+  function planPeople(p) {
+    const set = new Set();
+    samePlanGroup(p).concat([p]).forEach(q => [q.member, ...(q.with || [])].forEach(m => m && set.add(m)));
+    const order = state.members || [];
+    return [...set].sort((a, b) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999));
+  }
+  function planExpenses(p) { const ids = new Set(samePlanGroup(p).concat([p]).map(q => String(q.id))); return (state.expenses || []).filter(e => e.planId != null && ids.has(String(e.planId))); }
+  function planOf(e) { return e.planId != null ? (state.plans || []).find(p => p.id == e.planId) : null; }
+  function planExtras(p, small) {
+    const people = planPeople(p), cost = planExpenses(p).reduce((t, e) => t + toHKD(e.amt, e.curr), 0);
+    const cls = small ? 'block text-[9px] opacity-70' : 'text-[10px] opacity-70 font-bold';
+    return (people.length >= 2 ? `<span class="${cls}">👥 ${people.map(esc).join(', ')}</span>` : '') + (cost ? `<span class="${cls}">💰 HKD ${Math.round(cost).toLocaleString()}</span>` : '');
+  }
+  // Each person's plans for a day, one entry per activity
+  function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); }
+
+  function fillExpensePlanOptions(date, selectedId) {
+    const row = document.getElementById('exPlanRow');
+    const seen = new Set();
+    const opts = (state.plans || []).filter(p => p.date === date).sort(sortPlans).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; });
+    const sel = selectedId != null ? (state.plans || []).find(p => p.id == selectedId) : null;
+    if (sel && !opts.some(p => samePlanGroup(p).some(q => q.id == sel.id))) opts.push(sel);
+    row.classList.toggle('hidden', !opts.length);
+    document.getElementById('exPlan').innerHTML = '<option value="">— None —</option>' + opts.map(p => `<option value="${p.id}">${p.type === 'arrive' ? '✈ ' : '📍 '}${esc(p.place)}</option>`).join('');
+    const match = sel ? opts.find(p => samePlanGroup(p).some(q => q.id == sel.id)) : null;
+    document.getElementById('exPlan').value = match ? match.id : '';
+  }
+  // Picking an activity pre-ticks the people in it as splitees
+  function onExpensePlanChange() {
+    const p = (state.plans || []).find(x => x.id == document.getElementById('exPlan').value);
+    if (!p) return;
+    const people = planPeople(p);
+    if (!people.some(m => (state.members || []).includes(m))) return;
+    document.querySelectorAll('#modalSplit input').forEach(i => i.checked = people.includes(i.value));
+    if (!document.getElementById('exDesc').value) document.getElementById('exDesc').value = p.place;
+  }
+  function addExpenseForPlan() {
+    const p = (state.plans || []).find(x => x.id == document.getElementById('planId').value);
+    if (!p) return;
+    closePlanModal(); openModal(p.date);
+    document.getElementById('exPlan').value = p.id; onExpensePlanChange();
+  }
+
   function renderCalendar() {
     if (calTripId !== state.id) { calTripId = state.id; calMonth = null; calSelected = null; calFilter = 'ALL'; }
     const start = parseYMD(state.startDate), end = parseYMD(state.endDate);
@@ -447,7 +496,7 @@
     if (calFilter !== 'ALL' && !(state.members || []).includes(calFilter)) calFilter = 'ALL';
 
     const allPlans = (state.plans || []).slice().sort(sortPlans);
-    const plans = allPlans.filter(p => calFilter === 'ALL' || p.member === calFilter);
+    const plans = allPlans.filter(p => calFilter === 'ALL' || planPeople(p).includes(calFilter));
     const byDate = {};
     plans.forEach(p => (byDate[p.date] = byDate[p.date] || []).push(p));
 
@@ -457,7 +506,7 @@
     document.getElementById('arrivalSummary').innerHTML = members.length ? `<div class="app-card p-5 space-y-3">
         <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">✈ Arrivals</p>
         ${members.map(m => {
-            const mine = arrivals.filter(p => p.member === m);
+            const mine = plansFor(arrivals, m);
             return `<div class="flex items-start gap-3 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-16 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 space-y-1">${mine.length ? mine.map(p => `<p><span class="font-bold opacity-60">${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''}</span> · ${esc(p.place)}</p>`).join('') : '<p class="opacity-30 italic">Not set</p>'}</div></div>`;
         }).join('')}
       </div>` : '<p class="text-center py-2 text-[11px] opacity-40 italic">Add members (+ above) to start planning</p>';
@@ -482,7 +531,7 @@
     for (let day = 1; day <= days; day++) {
         const d = new Date(y, mo, day), ds = fmtYMD(d);
         const inTrip = hasRange && d >= start && d <= end;
-        const marks = (byDate[ds] || []).map(p => `<span class="plan-mark" style="color:${memberColor(p.member)}">${p.type === 'arrive' ? '✈' : '●'}</span>`).join('');
+        const marks = (state.members || []).concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !(state.members || []).includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type === 'arrive' ? '✈' : '●'}</span>`)).join('');
         g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
                 <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
                 <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
@@ -494,15 +543,16 @@
     const sel = parseYMD(calSelected);
     const dayNo = hasRange && sel >= start && sel <= end ? Math.round((sel - start) / 86400000) + 1 : null;
     const dayPlans = byDate[calSelected] || [];
-    const who = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...dayPlans.map(p => p.member)])];
-    const groups = who.map(m => ({ m, items: dayPlans.filter(p => p.member === m) })).filter(x => x.items.length);
+    const who = calFilter === 'ALL' ? [...new Set([...members, ...dayPlans.flatMap(planPeople)])] : [calFilter];
+    const groups = who.map(m => ({ m, items: plansFor(dayPlans, m) })).filter(x => x.items.length);
     document.getElementById('calDayDetail').innerHTML = `<div class="space-y-4">
         <div class="flex justify-between items-end px-2"><p class="serif text-2xl font-bold">${dayNo ? 'Day ' + dayNo : sel.toLocaleDateString('en-US', { weekday: 'long' })}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${calSelected.replace(/-/g, '/')}</p></div>
         ${groups.length ? groups.map(({ m, items }) => `<div class="app-card p-5 space-y-3">
             <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span><p class="font-bold text-sm">${esc(m)}</p></div>
             ${items.map(p => `<div class="flex justify-between items-center gap-3">
                 <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '✈ Arrive · ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
-                ${p.time || p.note ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.time || '')}${p.time && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}</div>
+                ${p.time || p.note ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.time || '')}${p.time && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
+                <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p></div>
                 <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
               </div>`).join('')}
           </div>`).join('') : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
@@ -515,7 +565,7 @@
     const members = state.members || [];
     const exps = state.expenses || [];
     const fmt = n => Math.round(n).toLocaleString();
-    const people = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...plans.map(p => p.member)])];
+    const people = calFilter === 'ALL' ? [...new Set([...members, ...plans.flatMap(planPeople)])] : [calFilter];
     const dates = new Set([...plans.map(p => p.date), ...exps.map(e => e.date)].filter(d => parseYMD(d)));
     if (hasRange) for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) dates.add(fmtYMD(d));
     const rows = [...(exps.some(e => e.date === 'PRE') ? ['PRE'] : []), ...[...dates].sort()].map(ds => {
@@ -532,8 +582,8 @@
         return;
     }
     document.getElementById('masterHead').innerHTML = `<tr><th class="name-col"><span class="text-[9px] opacity-50 uppercase">Date</span></th>${people.map(m => `<th><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span></th>`).join('')}<th class="spend-col">💰 Spent</th><th class="spend-col">Σ Total</th></tr>`;
-    const cell = {};
-    plans.forEach(p => ((cell[p.date + '|' + p.member] = cell[p.date + '|' + p.member] || []).push(p)));
+    const byDay = {};
+    plans.forEach(p => (byDay[p.date] = byDay[p.date] || []).push(p));
     document.getElementById('masterBody').innerHTML = rows.map(r => {
         const dateCell = r.ds === 'PRE'
             ? '<p class="font-bold">Pre-Trip</p><p class="text-[9px] opacity-50 font-bold">Before</p>'
@@ -543,11 +593,11 @@
             ${people.map(m => {
                 const c = memberColor(m), mi = members.indexOf(m);
                 const add = r.ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${r.ds}', ${mi})"` : '';
-                return `<td class="member-cell" ${add}>${(cell[r.ds + '|' + m] || []).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}</span>`).join('')}</td>`;
+                return `<td class="member-cell" ${add}>${plansFor(byDay[r.ds] || [], m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}${planExtras(p, true)}</span>`).join('')}</td>`;
             }).join('')}
             <td class="member-cell spend-col" onclick="openModal('${r.ds}')">${r.dayExps.map(e => {
                 const c = e.isPool ? '#d1a54a' : memberColor(e.payer);
-                return `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="background:#f1ede4; border-left:3px solid ${c}">${esc(e.desc)}<span class="block text-[9px] opacity-60">${e.isPool ? '🟡 Pool' : esc(e.payer)} · ${esc(e.curr)} ${Number(e.amt).toLocaleString()}</span></span>`;
+                return `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="background:#f1ede4; border-left:3px solid ${c}">${esc(e.desc)}<span class="block text-[9px] opacity-60">${e.isPool ? '🟡 Pool' : esc(e.payer)} · ${esc(e.curr)} ${Number(e.amt).toLocaleString()}</span>${planOf(e) ? `<span class="block text-[9px] opacity-60">📍 ${esc(planOf(e).place)}</span>` : ''}</span>`;
             }).join('')}</td>
             <td class="spend-col font-bold whitespace-nowrap">${r.total ? 'HKD ' + fmt(r.total) : '<span class="opacity-20">–</span>'}</td>
           </tr>`;
@@ -569,13 +619,17 @@
     const p = id ? (state.plans || []).find(x => x.id == id) : null;
     if (id && !p) return;
     const members = state.members.slice();
-    if (p && !members.includes(p.member)) members.push(p.member);
-    document.getElementById('planMember').innerHTML = members.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    const going = p ? [p.member, ...(p.with || [])] : [];
+    going.forEach(m => { if (m && !members.includes(m)) members.push(m); });
     document.getElementById('planModalTitle').innerText = p ? 'Edit Plan' : 'New Plan';
     document.getElementById('planId').value = p ? p.id : '';
     document.getElementById('planDeleteBtn').classList.toggle('hidden', !p);
     const presetMember = presetMemberIdx != null ? state.members[presetMemberIdx] : null;
-    document.getElementById('planMember').value = p ? p.member : (presetMember || (calFilter !== 'ALL' ? calFilter : members[0]));
+    const checked = p ? going : [presetMember || (calFilter !== 'ALL' ? calFilter : members[0])];
+    document.getElementById('planWho').innerHTML = members.map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${esc(m)}" ${checked.includes(m) ? 'checked' : ''}> <span class="text-xs font-bold">${esc(m)}</span></label>`).join('');
+    const linked = p ? planExpenses(p) : [];
+    document.getElementById('planCostSection').classList.toggle('hidden', !p);
+    document.getElementById('planCostList').innerHTML = linked.map(e => `<div onclick="closePlanModal(); editExpense('${e.id}')" class="flex justify-between items-center text-xs bg-white/70 rounded-xl px-3 py-2 cursor-pointer"><span class="font-bold truncate">${esc(e.desc)} <span class="opacity-50">· ${e.isPool ? 'Pool' : esc(e.payer)}</span></span><span class="font-bold whitespace-nowrap pl-2">${esc(e.curr)} ${Number(e.amt).toLocaleString()}</span></div>`).join('') || '<p class="text-[11px] opacity-40 italic ml-2">Nothing yet</p>';
     document.getElementById('planDate').value = p ? p.date : (presetDate || calSelected);
     document.getElementById('planTime').value = p ? (p.time || '') : '';
     document.getElementById('planPlace').value = p ? p.place : '';
@@ -590,7 +644,11 @@
     if (!place) { alert('Where?'); return; }
     if (!parseYMD(date)) { alert('Pick a date.'); return; }
     const pid = document.getElementById('planId').value;
-    const rec = { id: pid ? parseInt(pid) : Date.now(), date, type: planType, member: document.getElementById('planMember').value, place, time: document.getElementById('planTime').value || '', note: document.getElementById('planNote').value.trim() };
+    const who = Array.from(document.querySelectorAll('#planWho input:checked')).map(i => i.value);
+    if (!who.length) { alert("Pick who's going."); return; }
+    const old = pid ? (state.plans || []).find(p => p.id == pid) : null;
+    const member = old && who.includes(old.member) ? old.member : who[0];
+    const rec = { id: pid ? parseInt(pid) : Date.now(), date, type: planType, member, with: who.filter(m => m !== member), place, time: document.getElementById('planTime').value || '', note: document.getElementById('planNote').value.trim() };
     if (!state.plans) state.plans = [];
     const i = pid ? state.plans.findIndex(p => p.id == pid) : -1;
     if (i !== -1) state.plans[i] = rec; else state.plans.push(rec);
@@ -598,7 +656,7 @@
     closePlanModal(); saveAll(); renderCalendar();
   }
   function deletePlanFromModal() { const id = document.getElementById('planId').value; const before = (state.plans || []).length; deletePlan(id); if ((state.plans || []).length < before) closePlanModal(); }
-  function deletePlan(id) { const p = (state.plans || []).find(x => x.id == id); if (p && confirm(`Delete "${p.place}"?`)) { state.plans = state.plans.filter(x => x.id != id); saveAll(); renderCalendar(); } }
+  function deletePlan(id) { const p = (state.plans || []).find(x => x.id == id); if (p && confirm(`Delete "${p.place}"?`)) { const other = samePlanGroup(p).find(q => q.id != p.id); state.plans = state.plans.filter(x => x.id != id); (state.expenses || []).forEach(e => { if (e.planId == id) { if (other) e.planId = other.id; else delete e.planId; } }); saveAll(); renderCalendar(); } }
 
   function copySummary() { navigator.clipboard.writeText(document.getElementById('transferList').innerText); alert("Copied!"); }
 </script>
