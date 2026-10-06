@@ -75,6 +75,7 @@
       <div class="flex bg-white/40 p-1 rounded-full">
           <button id="viewTabLedger" onclick="setView('ledger')" class="view-tab flex-1 active">💰 Ledger</button>
           <button id="viewTabCalendar" onclick="setView('calendar')" class="view-tab flex-1">📅 Calendar</button>
+          <button id="viewTabOverview" onclick="setView('overview')" class="view-tab flex-1">📋 Overview</button>
       </div>
     </div>
 
@@ -150,6 +151,7 @@
             <div id="calDayDetail"></div>
             </div>
         </div>
+        <div id="overviewView" class="hidden space-y-6"></div>
         <div class="h-20"></div>
     </div>
   </main>
@@ -260,7 +262,7 @@
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
     document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
     document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300">×</button></div>`).join('');
-    renderTimeline(); calculateFinancials(); renderCalendar(); applyView();
+    renderTimeline(); calculateFinancials(); renderCalendar(); renderOverview(); applyView();
   }
 
   function renderTimeline() {
@@ -386,12 +388,74 @@
   try { currentView = localStorage.getItem('tripLedger_view') || 'ledger'; } catch (e) {}
   function setView(v) { currentView = v; try { localStorage.setItem('tripLedger_view', v); } catch (e) {} applyView(); }
   function applyView() {
-    const isCal = currentView === 'calendar';
-    document.getElementById('ledgerView').classList.toggle('hidden', isCal);
-    document.getElementById('calendarView').classList.toggle('hidden', !isCal);
-    document.querySelector('.jump-btn').style.display = isCal ? 'none' : 'flex';
-    document.getElementById('viewTabLedger').classList.toggle('active', !isCal);
-    document.getElementById('viewTabCalendar').classList.toggle('active', isCal);
+    if (!['ledger', 'calendar', 'overview'].includes(currentView)) currentView = 'ledger';
+    [['ledger', 'ledgerView', 'viewTabLedger'], ['calendar', 'calendarView', 'viewTabCalendar'], ['overview', 'overviewView', 'viewTabOverview']].forEach(([v, view, tab]) => {
+        document.getElementById(view).classList.toggle('hidden', currentView !== v);
+        document.getElementById(tab).classList.toggle('active', currentView === v);
+    });
+    document.querySelector('.jump-btn').style.display = currentView === 'ledger' ? 'flex' : 'none';
+  }
+
+  // ---------- Overview: ledger + calendar day by day (read-only summary; tap items to edit) ----------
+  function toHKD(amt, curr) { return curr === 'HKD' ? amt : amt / (state.rateVal || 1); }
+  function renderOverview() {
+    const members = state.members || [];
+    const exps = state.expenses || [];
+    const plans = (state.plans || []).slice().sort(sortPlans);
+    const start = parseYMD(state.startDate), end = parseYMD(state.endDate);
+    const hasRange = start && end && start <= end;
+    const fmt = n => Math.round(n).toLocaleString();
+
+    // Each person's share of all spending (pool spending is split like any other record)
+    const share = {}; members.forEach(m => share[m] = 0);
+    let totalHKD = 0;
+    exps.forEach(e => {
+        const hk = toHKD(e.amt, e.curr); totalHKD += hk;
+        const sw = (e.splitWith || []).filter(m => share[m] !== undefined);
+        const who = sw.length ? sw : members;
+        who.forEach(m => share[m] += hk / who.length);
+    });
+
+    const summary = `<div class="app-card p-6 space-y-5">
+        <div class="flex justify-between items-start">
+            <div><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest mb-1">Total spent</p><p class="text-3xl font-bold tracking-tighter">HKD ${fmt(totalHKD)}</p><p class="text-[10px] opacity-50 font-bold">≈ ${esc(state.targetCurr)} ${fmt(totalHKD * (state.rateVal || 1))}</p></div>
+            <div class="text-right"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest mb-1">Pool left</p><p class="text-xl font-bold">${esc(state.targetCurr)} ${document.getElementById('commonPoolInfo').innerText}</p></div>
+        </div>
+        ${members.length ? `<div class="space-y-2"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Each person's share</p>
+            ${members.map(m => `<div class="flex justify-between items-center text-xs"><span class="flex items-center gap-2 font-bold"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span><span class="font-bold">HKD ${fmt(share[m])}</span></div>`).join('')}
+        </div>` : ''}
+        <div class="space-y-2"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Settle up</p>${document.getElementById('transferList').innerHTML}</div>
+      </div>`;
+
+    // Days: pre-trip, every trip day, then any other date with a record or plan
+    const dates = new Set([...exps.map(e => e.date), ...plans.map(p => p.date)].filter(d => parseYMD(d)));
+    if (hasRange) for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) dates.add(fmtYMD(d));
+    const days = [...(exps.some(e => e.date === 'PRE') ? ['PRE'] : []), ...[...dates].sort()];
+    const today = fmtYMD(new Date());
+
+    const dayCards = days.map(ds => {
+        const dayExps = exps.filter(e => e.date === ds);
+        const dayPlans = plans.filter(p => p.date === ds);
+        const d = parseYMD(ds);
+        const inTrip = hasRange && d && d >= start && d <= end;
+        const title = ds === 'PRE' ? 'Pre-Trip' : inTrip ? 'Day ' + (Math.round((d - start) / 86400000) + 1) : d.toLocaleDateString('en-US', { weekday: 'long' });
+        const sub = ds === 'PRE' ? 'Before the trip' : `${d.toLocaleDateString('en-US', { weekday: 'short' })} · ${ds.replace(/-/g, '/')}`;
+        const dayTotal = dayExps.reduce((t, e) => t + toHKD(e.amt, e.curr), 0);
+        const people = [...new Set([...members, ...dayPlans.map(p => p.member)])].filter(m => dayPlans.some(p => p.member === m));
+        return `<div class="app-card p-5 space-y-4 ${ds === today ? 'ring-2 ring-[#6d5d51]' : ''}">
+            <div class="flex justify-between items-end"><div><p class="serif text-2xl font-bold">${title}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${sub}</p></div>
+              ${dayExps.length ? `<div class="text-right"><p class="text-[9px] opacity-40 font-bold uppercase">Spent</p><p class="font-bold text-sm">HKD ${fmt(dayTotal)}</p></div>` : ''}</div>
+            ${people.length ? `<div class="space-y-2"><p class="text-[9px] font-bold opacity-40 uppercase tracking-widest">📍 Where</p>
+              ${people.map(m => `<div class="flex items-start gap-2 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-14 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 flex flex-wrap gap-1">${dayPlans.filter(p => p.member === m).map(p => `<span onclick="openPlanModal('${p.id}')" class="plan-chip !mb-0 cursor-pointer" style="background:${memberColor(m)}22; border-left:3px solid ${memberColor(m)}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? ` <span class="opacity-60 text-[9px]">${esc(p.time)}</span>` : ''}</span>`).join('')}</div></div>`).join('')}
+            </div>` : ''}
+            ${dayExps.length ? `<div class="space-y-2"><p class="text-[9px] font-bold opacity-40 uppercase tracking-widest">💰 Spending</p>
+              ${dayExps.map(e => `<div onclick="editExpense('${e.id}')" class="flex justify-between items-center text-xs bg-[#f1ede4]/60 rounded-xl px-3 py-2 cursor-pointer ${e.settled ? 'settled' : ''}"><div class="min-w-0"><p class="font-bold truncate">${esc(e.desc)}</p><p class="text-[9px] opacity-60 font-bold">${e.isPool ? '🟡 Pool' : esc(e.payer) + ' paid'}${(e.splitWith || []).length ? ' · split ' + e.splitWith.length : ''}</p></div><p class="font-bold whitespace-nowrap pl-2">${esc(e.curr)} ${Number(e.amt).toLocaleString()}</p></div>`).join('')}
+            </div>` : ''}
+            ${!people.length && !dayExps.length ? '<p class="text-[11px] opacity-30 italic">Nothing planned yet</p>' : ''}
+          </div>`;
+    }).join('');
+
+    document.getElementById('overviewView').innerHTML = summary + (dayCards || '<p class="text-center py-2 text-[11px] opacity-40 italic">Set trip dates to see each day</p>');
   }
 
   // ---------- Calendar ----------
