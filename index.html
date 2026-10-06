@@ -47,6 +47,8 @@
     .master-table td.member-cell { min-width: 104px; max-width: 140px; cursor: pointer; }
     .master-table .out-trip { opacity: 0.55; }
     .master-table th.is-today { box-shadow: inset 0 -3px 0 var(--main-brown); }
+    .master-table tr.spend-row td { background: #faf8f4; border-top: 2px solid #e8e1d7; }
+    .master-table tr.total-row td { background: #faf8f4; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
@@ -433,29 +435,37 @@
     const days = [...(exps.some(e => e.date === 'PRE') ? ['PRE'] : []), ...[...dates].sort()];
     const today = fmtYMD(new Date());
 
-    const dayCards = days.map(ds => {
-        const dayExps = exps.filter(e => e.date === ds);
-        const dayPlans = plans.filter(p => p.date === ds);
+    // Master table: dates across the top; a row per person (where they are), then spending and the day total
+    const cols = days.map(ds => {
         const d = parseYMD(ds);
         const inTrip = hasRange && d && d >= start && d <= end;
-        const title = ds === 'PRE' ? 'Pre-Trip' : inTrip ? 'Day ' + (Math.round((d - start) / 86400000) + 1) : d.toLocaleDateString('en-US', { weekday: 'long' });
-        const sub = ds === 'PRE' ? 'Before the trip' : `${d.toLocaleDateString('en-US', { weekday: 'short' })} · ${ds.replace(/-/g, '/')}`;
-        const dayTotal = dayExps.reduce((t, e) => t + toHKD(e.amt, e.curr), 0);
-        const people = [...new Set([...members, ...dayPlans.map(p => p.member)])].filter(m => dayPlans.some(p => p.member === m));
-        return `<div class="app-card p-5 space-y-4 ${ds === today ? 'ring-2 ring-[#6d5d51]' : ''}">
-            <div class="flex justify-between items-end"><div><p class="serif text-2xl font-bold">${title}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${sub}</p></div>
-              ${dayExps.length ? `<div class="text-right"><p class="text-[9px] opacity-40 font-bold uppercase">Spent</p><p class="font-bold text-sm">HKD ${fmt(dayTotal)}</p></div>` : ''}</div>
-            ${people.length ? `<div class="space-y-2"><p class="text-[9px] font-bold opacity-40 uppercase tracking-widest">📍 Where</p>
-              ${people.map(m => `<div class="flex items-start gap-2 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-14 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 flex flex-wrap gap-1">${dayPlans.filter(p => p.member === m).map(p => `<span onclick="openPlanModal('${p.id}')" class="plan-chip !mb-0 cursor-pointer" style="background:${memberColor(m)}22; border-left:3px solid ${memberColor(m)}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? ` <span class="opacity-60 text-[9px]">${esc(p.time)}</span>` : ''}</span>`).join('')}</div></div>`).join('')}
-            </div>` : ''}
-            ${dayExps.length ? `<div class="space-y-2"><p class="text-[9px] font-bold opacity-40 uppercase tracking-widest">💰 Spending</p>
-              ${dayExps.map(e => `<div onclick="editExpense('${e.id}')" class="flex justify-between items-center text-xs bg-[#f1ede4]/60 rounded-xl px-3 py-2 cursor-pointer ${e.settled ? 'settled' : ''}"><div class="min-w-0"><p class="font-bold truncate">${esc(e.desc)}</p><p class="text-[9px] opacity-60 font-bold">${e.isPool ? '🟡 Pool' : esc(e.payer) + ' paid'}${(e.splitWith || []).length ? ' · split ' + e.splitWith.length : ''}</p></div><p class="font-bold whitespace-nowrap pl-2">${esc(e.curr)} ${Number(e.amt).toLocaleString()}</p></div>`).join('')}
-            </div>` : ''}
-            ${!people.length && !dayExps.length ? '<p class="text-[11px] opacity-30 italic">Nothing planned yet</p>' : ''}
-          </div>`;
-    }).join('');
+        const dayExps = exps.filter(e => e.date === ds);
+        return { ds, d, inTrip, dayNo: inTrip ? Math.round((d - start) / 86400000) + 1 : null, dayExps, dayPlans: plans.filter(p => p.date === ds), total: dayExps.reduce((t, e) => t + toHKD(e.amt, e.curr), 0) };
+    });
+    const people = [...new Set([...members, ...plans.map(p => p.member)])];
+    let table = '<p class="text-center py-2 text-[11px] opacity-40 italic">Set trip dates to see each day</p>';
+    if (cols.length) {
+        const head = `<tr><th class="name-col"></th>${cols.map(c => `<th class="${c.ds === 'PRE' || c.inTrip ? '' : 'out-trip'} ${c.ds === today ? 'is-today' : ''}">${c.ds === 'PRE'
+            ? '<p class="font-bold">Pre-Trip</p><p class="text-[9px] opacity-50 font-bold">Before</p>'
+            : `<p class="font-bold">${fmtShort(c.ds)}</p><p class="text-[9px] opacity-50 font-bold">${c.d.toLocaleDateString('en-US', { weekday: 'short' })}${c.dayNo ? ' · D' + c.dayNo : ''}</p>`}</th>`).join('')}</tr>`;
+        const label = (icon, text) => `<td class="name-col"><span class="text-[9px] opacity-50 uppercase">${icon} ${text}</span></td>`;
+        const personRows = people.map(m => {
+            const c = memberColor(m), mi = members.indexOf(m);
+            return `<tr><td class="name-col"><span class="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle" style="background:${c}"></span>${esc(m)}</td>${cols.map(col => {
+                const add = col.ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${col.ds}', ${mi})"` : '';
+                return `<td class="member-cell ${col.ds === 'PRE' || col.inTrip ? '' : 'out-trip'}" ${add}>${col.dayPlans.filter(p => p.member === m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}</span>`).join('')}</td>`;
+            }).join('')}</tr>`;
+        }).join('');
+        const spendRow = `<tr class="spend-row">${label('💰', 'Spent')}${cols.map(col => `<td class="member-cell ${col.ds === 'PRE' || col.inTrip ? '' : 'out-trip'}" onclick="openModal('${col.ds}')">${col.dayExps.map(e => {
+                const c = e.isPool ? '#d1a54a' : memberColor(e.payer);
+                return `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="background:#f1ede4; border-left:3px solid ${c}">${esc(e.desc)}<span class="block text-[9px] opacity-60">${e.isPool ? '🟡 Pool' : esc(e.payer)} · ${esc(e.curr)} ${Number(e.amt).toLocaleString()}</span></span>`;
+            }).join('')}</td>`).join('')}</tr>`;
+        const totalRow = `<tr class="total-row">${label('Σ', 'Day total')}${cols.map(col => `<td class="${col.ds === 'PRE' || col.inTrip ? '' : 'out-trip'} font-bold">${col.total ? 'HKD ' + fmt(col.total) : '<span class="opacity-20">–</span>'}</td>`).join('')}</tr>`;
+        table = `<div class="space-y-3"><div class="app-card p-2"><div class="master-wrap"><table class="master-table"><thead>${head}</thead><tbody>${personRows}${spendRow}${totalRow}</tbody></table></div></div>
+            <p class="text-[9px] text-center opacity-40 font-bold">Tap an empty box to add · tap a plan or expense to edit</p></div>`;
+    }
 
-    document.getElementById('overviewView').innerHTML = summary + (dayCards || '<p class="text-center py-2 text-[11px] opacity-40 italic">Set trip dates to see each day</p>');
+    document.getElementById('overviewView').innerHTML = table + summary;
   }
 
   // ---------- Calendar ----------
