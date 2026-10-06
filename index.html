@@ -41,11 +41,12 @@
     .master-table { border-collapse: separate; border-spacing: 0; font-size: 11px; width: 100%; }
     .master-table th, .master-table td { padding: 6px; vertical-align: top; border-bottom: 1px solid #efe9e1; }
     .master-table thead th { position: sticky; top: 0; background: white; z-index: 2; text-align: left; white-space: nowrap; }
-    .master-table .date-col { position: sticky; left: 0; background: white; z-index: 1; width: 56px; min-width: 56px; }
-    .master-table thead .date-col { z-index: 3; }
-    .master-table td.member-cell { min-width: 112px; cursor: pointer; }
-    .master-table tr.out-trip td { opacity: 0.55; }
-    .master-table tr.is-today .date-col { box-shadow: inset 3px 0 0 var(--main-brown); }
+    .master-table th, .master-table td { border-right: 1px solid #efe9e1; }
+    .master-table .name-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 64px; max-width: 80px; font-weight: 700; white-space: normal; word-break: break-word; }
+    .master-table thead .name-col { z-index: 3; }
+    .master-table td.member-cell { min-width: 104px; max-width: 140px; cursor: pointer; }
+    .master-table .out-trip { opacity: 0.55; }
+    .master-table th.is-today { box-shadow: inset 0 -3px 0 var(--main-brown); }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
@@ -475,33 +476,34 @@
         <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
       </div>`;
   }
-  // Master calendar: every trip day (plus any planned day outside it) × every person
+  // Master calendar: one row per person, one column per trip day (plus any planned day outside it)
   function renderMaster(plans, start, end, hasRange) {
     const members = state.members || [];
-    const cols = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...plans.map(p => p.member)])];
+    const people = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...plans.map(p => p.member)])];
     const dates = new Set(plans.map(p => p.date));
     if (hasRange) for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) dates.add(fmtYMD(d));
-    const rows = [...dates].filter(parseYMD).sort();
-    const today = fmtYMD(new Date());
-    document.getElementById('masterHead').innerHTML = `<tr><th class="date-col text-[9px] opacity-50 uppercase">Date</th>${cols.map(m => `<th><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span></th>`).join('')}</tr>`;
-    if (!cols.length || !rows.length) {
-        document.getElementById('masterBody').innerHTML = `<tr><td colspan="${cols.length + 1}" class="text-center py-6 opacity-40 italic">${!cols.length ? 'Add members first' : 'Set trip dates or add a plan'}</td></tr>`;
-        return;
-    }
-    const cell = {};
-    plans.forEach(p => ((cell[p.date + '|' + p.member] = cell[p.date + '|' + p.member] || []).push(p)));
-    const memberIdx = m => members.indexOf(m);
-    document.getElementById('masterBody').innerHTML = rows.map(ds => {
+    const cols = [...dates].filter(parseYMD).sort().map(ds => {
         const d = parseYMD(ds);
         const inTrip = hasRange && d >= start && d <= end;
-        const dayNo = inTrip ? Math.round((d - start) / 86400000) + 1 : null;
-        return `<tr class="${inTrip ? '' : 'out-trip'} ${ds === today ? 'is-today' : ''}">
-            <td class="date-col"><p class="font-bold">${fmtShort(ds)}</p><p class="text-[9px] opacity-50 font-bold">${d.toLocaleDateString('en-US', { weekday: 'short' })}${dayNo ? ' · D' + dayNo : ''}</p></td>
-            ${cols.map(m => {
-                const items = cell[ds + '|' + m] || [];
-                const c = memberColor(m);
-                const add = memberIdx(m) >= 0 ? `onclick="openPlanModal(null, '${ds}', ${memberIdx(m)})"` : '';
-                return `<td class="member-cell" ${add}>${items.map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}</span>`).join('')}</td>`;
+        return { ds, d, inTrip, dayNo: inTrip ? Math.round((d - start) / 86400000) + 1 : null };
+    });
+    const today = fmtYMD(new Date());
+    if (!people.length || !cols.length) {
+        document.getElementById('masterHead').innerHTML = '';
+        document.getElementById('masterBody').innerHTML = `<tr><td class="text-center py-6 opacity-40 italic">${!people.length ? 'Add members first' : 'Set trip dates or add a plan'}</td></tr>`;
+        return;
+    }
+    document.getElementById('masterHead').innerHTML = `<tr><th class="name-col"><span class="text-[9px] opacity-50 uppercase">Name</span></th>${cols.map(c => `<th class="${c.inTrip ? '' : 'out-trip'} ${c.ds === today ? 'is-today' : ''}"><p class="font-bold">${fmtShort(c.ds)}</p><p class="text-[9px] opacity-50 font-bold">${c.d.toLocaleDateString('en-US', { weekday: 'short' })}${c.dayNo ? ' · D' + c.dayNo : ''}</p></th>`).join('')}</tr>`;
+    const cell = {};
+    plans.forEach(p => ((cell[p.date + '|' + p.member] = cell[p.date + '|' + p.member] || []).push(p)));
+    document.getElementById('masterBody').innerHTML = people.map(m => {
+        const c = memberColor(m), mi = members.indexOf(m);
+        return `<tr>
+            <td class="name-col"><span class="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle" style="background:${c}"></span>${esc(m)}</td>
+            ${cols.map(col => {
+                const items = cell[col.ds + '|' + m] || [];
+                const add = mi >= 0 ? `onclick="openPlanModal(null, '${col.ds}', ${mi})"` : '';
+                return `<td class="member-cell ${col.inTrip ? '' : 'out-trip'}" ${add}>${items.map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}</span>`).join('')}</td>`;
             }).join('')}
           </tr>`;
     }).join('');
