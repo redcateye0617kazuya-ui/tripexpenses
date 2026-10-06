@@ -37,6 +37,16 @@
     .seg-btn { flex: 1; padding: 12px; border-radius: 16px; font-size: 13px; font-weight: 700; background: white; opacity: 0.5; }
     .seg-btn.active { background: var(--main-brown); color: white; opacity: 1; }
     input[type="time"] { background: #ffffff; border-radius: 20px; padding: 14px 18px; font-size: 16px !important; color: var(--main-brown); width: 100%; border: none; text-align: center; }
+    .master-wrap { overflow-x: auto; border-radius: 20px; }
+    .master-table { border-collapse: separate; border-spacing: 0; font-size: 11px; width: 100%; }
+    .master-table th, .master-table td { padding: 6px; vertical-align: top; border-bottom: 1px solid #efe9e1; }
+    .master-table thead th { position: sticky; top: 0; background: white; z-index: 2; text-align: left; white-space: nowrap; }
+    .master-table .date-col { position: sticky; left: 0; background: white; z-index: 1; width: 56px; min-width: 56px; }
+    .master-table thead .date-col { z-index: 3; }
+    .master-table td.member-cell { min-width: 112px; cursor: pointer; }
+    .master-table tr.out-trip td { opacity: 0.55; }
+    .master-table tr.is-today .date-col { box-shadow: inset 3px 0 0 var(--main-brown); }
+    .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
 </head>
@@ -115,18 +125,29 @@
 
         <div id="calendarView" class="hidden space-y-6">
             <div id="arrivalSummary"></div>
+            <div id="calFilter" class="flex flex-wrap gap-2 justify-center"></div>
+            <div class="flex bg-white/40 p-1 rounded-full">
+                <button id="calModeMaster" onclick="setCalMode('master')" class="view-tab flex-1">🗂 Master</button>
+                <button id="calModeMonth" onclick="setCalMode('month')" class="view-tab flex-1">🗓 Month</button>
+            </div>
+            <div id="masterView" class="space-y-3">
+                <div class="app-card p-2"><div class="master-wrap"><table class="master-table"><thead id="masterHead"></thead><tbody id="masterBody"></tbody></table></div></div>
+                <p class="text-[9px] text-center opacity-40 font-bold">Tap an empty box to add · tap a plan to edit</p>
+                <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
+            </div>
+            <div id="monthView" class="space-y-6">
             <div class="app-card p-4 space-y-3">
                 <div class="flex justify-between items-center px-1">
                     <button onclick="shiftCalMonth(-1)" class="w-9 h-9 rounded-full bg-[#f1ede4] font-bold">‹</button>
                     <p id="calMonthLabel" class="serif text-xl font-bold"></p>
                     <button onclick="shiftCalMonth(1)" class="w-9 h-9 rounded-full bg-[#f1ede4] font-bold">›</button>
                 </div>
-                <div id="calFilter" class="flex flex-wrap gap-2 justify-center"></div>
                 <div class="grid grid-cols-7 gap-1 text-center text-[9px] font-bold opacity-40"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
                 <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
                 <p class="text-[9px] text-center opacity-40 font-bold">✈ Arrive &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
             </div>
             <div id="calDayDetail"></div>
+            </div>
         </div>
         <div class="h-20"></div>
     </div>
@@ -165,6 +186,7 @@
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Note</p><input id="planNote" type="text" placeholder="Optional"></div>
         </div>
         <div class="flex gap-4 mt-10 pb-4"><button onclick="closePlanModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="savePlan()" class="flex-1 btn-primary">SAVE</button></div>
+        <button id="planDeleteBtn" onclick="deletePlanFromModal()" class="w-full text-[10px] text-red-400 opacity-60 font-bold pb-4">DELETE PLAN</button>
     </div>
   </div>
 
@@ -374,6 +396,9 @@
   // ---------- Calendar ----------
   const MEMBER_COLORS = ['#c0846a', '#6f8fb3', '#7a9e7e', '#b38bb0', '#d1a54a', '#5fa3a0', '#c26d7e', '#8c7a6b'];
   let calMonth = null, calSelected = null, calFilter = 'ALL', calTripId = null;
+  let calMode = 'master';
+  try { calMode = localStorage.getItem('tripLedger_calMode') || 'master'; } catch (e) {}
+  function setCalMode(m) { calMode = m; try { localStorage.setItem('tripLedger_calMode', m); } catch (e) {} renderCalendar(); }
   function memberColor(m) { const i = (state.members || []).indexOf(m); return i < 0 ? '#b5aca3' : MEMBER_COLORS[i % MEMBER_COLORS.length]; }
   function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || (a.type === 'arrive' ? 0 : 1) - (b.type === 'arrive' ? 0 : 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
   function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
@@ -404,8 +429,14 @@
       </div>` : '<p class="text-center py-2 text-[11px] opacity-40 italic">Add members (+ above) to start planning</p>';
 
     // Filter chips
-    const chip = (key, label, color) => `<button onclick="setCalFilter(${key === 'ALL' ? "'ALL'" : members.indexOf(key)})" class="px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${calFilter === key ? 'bg-[#6d5d51] text-white' : 'bg-[#f1ede4]'}">${color ? `<span class="w-2 h-2 rounded-full" style="background:${color}"></span>` : ''}${esc(label)}</button>`;
+    const chip = (key, label, color) => `<button onclick="setCalFilter(${key === 'ALL' ? "'ALL'" : members.indexOf(key)})" class="px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${calFilter === key ? 'bg-[#6d5d51] text-white' : 'bg-white shadow-sm'}">${color ? `<span class="w-2 h-2 rounded-full" style="background:${color}"></span>` : ''}${esc(label)}</button>`;
     document.getElementById('calFilter').innerHTML = members.length ? chip('ALL', 'All') + members.map(m => chip(m, m, memberColor(m))).join('') : '';
+
+    document.getElementById('masterView').classList.toggle('hidden', calMode !== 'master');
+    document.getElementById('monthView').classList.toggle('hidden', calMode === 'master');
+    document.getElementById('calModeMaster').classList.toggle('active', calMode === 'master');
+    document.getElementById('calModeMonth').classList.toggle('active', calMode !== 'master');
+    renderMaster(plans, start, end, hasRange);
 
     // Month grid
     const y = calMonth.getFullYear(), mo = calMonth.getMonth();
@@ -444,6 +475,37 @@
         <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
       </div>`;
   }
+  // Master calendar: every trip day (plus any planned day outside it) × every person
+  function renderMaster(plans, start, end, hasRange) {
+    const members = state.members || [];
+    const cols = [...new Set([...members.filter(m => calFilter === 'ALL' || m === calFilter), ...plans.map(p => p.member)])];
+    const dates = new Set(plans.map(p => p.date));
+    if (hasRange) for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) dates.add(fmtYMD(d));
+    const rows = [...dates].filter(parseYMD).sort();
+    const today = fmtYMD(new Date());
+    document.getElementById('masterHead').innerHTML = `<tr><th class="date-col text-[9px] opacity-50 uppercase">Date</th>${cols.map(m => `<th><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span></th>`).join('')}</tr>`;
+    if (!cols.length || !rows.length) {
+        document.getElementById('masterBody').innerHTML = `<tr><td colspan="${cols.length + 1}" class="text-center py-6 opacity-40 italic">${!cols.length ? 'Add members first' : 'Set trip dates or add a plan'}</td></tr>`;
+        return;
+    }
+    const cell = {};
+    plans.forEach(p => ((cell[p.date + '|' + p.member] = cell[p.date + '|' + p.member] || []).push(p)));
+    const memberIdx = m => members.indexOf(m);
+    document.getElementById('masterBody').innerHTML = rows.map(ds => {
+        const d = parseYMD(ds);
+        const inTrip = hasRange && d >= start && d <= end;
+        const dayNo = inTrip ? Math.round((d - start) / 86400000) + 1 : null;
+        return `<tr class="${inTrip ? '' : 'out-trip'} ${ds === today ? 'is-today' : ''}">
+            <td class="date-col"><p class="font-bold">${fmtShort(ds)}</p><p class="text-[9px] opacity-50 font-bold">${d.toLocaleDateString('en-US', { weekday: 'short' })}${dayNo ? ' · D' + dayNo : ''}</p></td>
+            ${cols.map(m => {
+                const items = cell[ds + '|' + m] || [];
+                const c = memberColor(m);
+                const add = memberIdx(m) >= 0 ? `onclick="openPlanModal(null, '${ds}', ${memberIdx(m)})"` : '';
+                return `<td class="member-cell" ${add}>${items.map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}</span>`).join('')}</td>`;
+            }).join('')}
+          </tr>`;
+    }).join('');
+  }
   function shiftCalMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); }
   function selectCalDay(ds) { calSelected = ds; renderCalendar(); }
   function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (state.members[i] ?? 'ALL'); renderCalendar(); }
@@ -455,7 +517,7 @@
     document.getElementById('planTypeVisit').classList.toggle('active', t === 'visit');
     document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : 'Place';
   }
-  function openPlanModal(id) {
+  function openPlanModal(id, presetDate, presetMemberIdx) {
     if (!(state.members || []).length) { alert('Add a member first.'); return; }
     const p = id ? (state.plans || []).find(x => x.id == id) : null;
     if (id && !p) return;
@@ -464,8 +526,10 @@
     document.getElementById('planMember').innerHTML = members.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
     document.getElementById('planModalTitle').innerText = p ? 'Edit Plan' : 'New Plan';
     document.getElementById('planId').value = p ? p.id : '';
-    document.getElementById('planMember').value = p ? p.member : (calFilter !== 'ALL' ? calFilter : members[0]);
-    document.getElementById('planDate').value = p ? p.date : calSelected;
+    document.getElementById('planDeleteBtn').classList.toggle('hidden', !p);
+    const presetMember = presetMemberIdx != null ? state.members[presetMemberIdx] : null;
+    document.getElementById('planMember').value = p ? p.member : (presetMember || (calFilter !== 'ALL' ? calFilter : members[0]));
+    document.getElementById('planDate').value = p ? p.date : (presetDate || calSelected);
     document.getElementById('planTime').value = p ? (p.time || '') : '';
     document.getElementById('planPlace').value = p ? p.place : '';
     document.getElementById('planNote').value = p ? (p.note || '') : '';
@@ -486,6 +550,7 @@
     calSelected = date; const d = parseYMD(date); calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
     closePlanModal(); saveAll(); renderCalendar();
   }
+  function deletePlanFromModal() { const id = document.getElementById('planId').value; const before = (state.plans || []).length; deletePlan(id); if ((state.plans || []).length < before) closePlanModal(); }
   function deletePlan(id) { const p = (state.plans || []).find(x => x.id == id); if (p && confirm(`Delete "${p.place}"?`)) { state.plans = state.plans.filter(x => x.id != id); saveAll(); renderCalendar(); } }
 
   function copySummary() { navigator.clipboard.writeText(document.getElementById('transferList').innerText); alert("Copied!"); }
