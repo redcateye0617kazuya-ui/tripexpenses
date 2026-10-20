@@ -52,7 +52,7 @@
     .join-dot { width: 20px; height: 20px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--c); color: var(--c); background: white; }
     .join-dot.on { background: var(--c); color: white; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
-    #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
+    #planDate, #planRetDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
 </head>
 <body class="p-0">
@@ -188,10 +188,16 @@
         <input type="hidden" id="planId">
         <div class="space-y-6">
             <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">🛬 Arrive</button><button id="planTypeDepart" onclick="setPlanType('depart')" class="seg-btn">🛫 Depart</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
-            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
+            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" onchange="prefillReturn()" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
             <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
             <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Note</p><input id="planNote" type="text" placeholder="Optional"></div>
+            <div id="planReturnSection" class="hidden bg-white/50 rounded-3xl p-4 space-y-4">
+                <input type="hidden" id="planRetId">
+                <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest ml-2">🛫 Return flight <span class="opacity-60 normal-case tracking-normal">(optional)</span></p>
+                <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planRetDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planRetTime"></div></div>
+                <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Leaving from</p><input id="planRetPlace" type="text" placeholder="Same as arrival if empty"></div>
+            </div>
             <div id="planCostSection" class="hidden"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">💰 Spent on this activity</p><div id="planCostList" class="space-y-2"></div><button onclick="addExpenseForPlan()" class="mt-3 text-[11px] font-bold opacity-70 w-full py-3 rounded-[20px] bg-white/70">+ ADD EXPENSE FOR THIS ACTIVITY</button></div>
         </div>
         <div class="flex gap-4 mt-10 pb-4"><button onclick="closePlanModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="savePlan()" class="flex-1 btn-primary">SAVE</button></div>
@@ -843,6 +849,8 @@
     document.getElementById('planTypeArrive').classList.toggle('active', t === 'arrive');
     document.getElementById('planTypeDepart').classList.toggle('active', t === 'depart');
     document.getElementById('planTypeVisit').classList.toggle('active', t === 'visit');
+    document.getElementById('planReturnSection').classList.toggle('hidden', t !== 'arrive');
+    if (t === 'arrive') prefillReturn();
     document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : t === 'depart' ? 'Leaving from' : 'Place';
   }
   function openPlanModal(id, presetDate, presetMemberIdx) {
@@ -865,10 +873,30 @@
     document.getElementById('planTime').value = p ? (p.time || '') : '';
     document.getElementById('planPlace').value = p ? p.place : '';
     document.getElementById('planNote').value = p ? (p.note || '') : '';
+    // Return flight: the depart linked to this arrival, or else this person's existing departure
+    const ret = p && p.type === 'arrive' ? returnPlanFor(p) : null;
+    document.getElementById('planRetId').value = ret ? ret.id : '';
+    document.getElementById('planRetDate').value = ret ? ret.date : '';
+    document.getElementById('planRetTime').value = ret ? (ret.time || '') : '';
+    document.getElementById('planRetPlace').value = ret ? ret.place : '';
     setPlanType(p ? p.type : 'visit');
     document.getElementById('planModal').classList.remove('hidden');
   }
   function closePlanModal() { document.getElementById('planModal').classList.add('hidden'); }
+  // New arrival: show the first ticked person's existing departure so it gets edited, not duplicated
+  function prefillReturn() {
+    if (planType !== 'arrive' || document.getElementById('planId').value) return;
+    const first = (document.querySelector('#planWho input:checked') || {}).value;
+    const ret = first ? returnPlanFor({ member: first }) : null;
+    document.getElementById('planRetId').value = ret ? ret.id : '';
+    document.getElementById('planRetDate').value = ret ? ret.date : '';
+    document.getElementById('planRetTime').value = ret ? (ret.time || '') : '';
+    document.getElementById('planRetPlace').value = ret ? ret.place : '';
+  }
+  function returnPlanFor(p) {
+    const plans = state.plans || [];
+    return (p.returnId != null && plans.find(x => x.id == p.returnId && x.type === 'depart')) || plans.find(x => x.type === 'depart' && x.member === p.member) || null;
+  }
   function savePlan() {
     const place = document.getElementById('planPlace').value.trim();
     const date = document.getElementById('planDate').value;
@@ -881,6 +909,22 @@
     const member = old && who.includes(old.member) ? old.member : who[0];
     const rec = { id: pid ? parseInt(pid) : Date.now(), date, type: planType, member, with: who.filter(m => m !== member), place, time: document.getElementById('planTime').value || '', note: document.getElementById('planNote').value.trim() };
     if (!state.plans) state.plans = [];
+    if (planType === 'arrive') {
+        // the arrival form can also hold the return flight: saved as that person's 🛫 Depart plan
+        const retDate = document.getElementById('planRetDate').value;
+        const retId = document.getElementById('planRetId').value;
+        if (retDate) {
+            if (retDate < date) { alert('The return date is before the arrival date.'); return; }
+            const oldRet = retId ? state.plans.find(x => x.id == retId) : null;
+            const ret = { id: oldRet ? oldRet.id : rec.id + 1, date: retDate, type: 'depart', member, with: rec.with, place: document.getElementById('planRetPlace').value.trim() || place, time: document.getElementById('planRetTime').value || '', note: oldRet ? (oldRet.note || '') : '' };
+            const j = state.plans.findIndex(x => x.id == ret.id);
+            if (j !== -1) state.plans[j] = ret; else state.plans.push(ret);
+            rec.returnId = ret.id;
+        } else if (retId) {
+            // return date cleared: drop that departure
+            state.plans = state.plans.filter(x => x.id != retId);
+        }
+    }
     const i = pid ? state.plans.findIndex(p => p.id == pid) : -1;
     if (i !== -1) state.plans[i] = rec; else state.plans.push(rec);
     calSelected = date; const d = parseYMD(date); calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
