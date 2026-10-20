@@ -24,3 +24,8 @@
 ## 4. （確認冇問題之後）刪除舊資料
 **Realtime Database → Data** → 喺 `tripLedgerData` 撳 **⋮ → Delete**。
 未刪之前，任何用 Google 登入嘅人都仲讀到舊資料（為咗畀你 import）。
+
+## 更新：邀請連結（copy link）
+加咗邀請連結之後，`database.rules.json` 有改動。
+**Merge PR 之後，要再去 Realtime Database → Rules，貼一次新嘅 `database.rules.json` 再 Publish**，
+唔係嘅話朋友用條連結會顯示「This invite link is no longer valid」。

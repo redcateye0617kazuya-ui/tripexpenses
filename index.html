@@ -203,9 +203,17 @@
     <div class="bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 class="serif text-2xl mb-2 text-center font-bold">Who can see this trip</h3>
-        <p class="text-[11px] text-center opacity-50 mb-6">Only the people below can open <b id="shareTripName"></b>. Each person signs in with the Google account of that email.</p>
+        <p class="text-[11px] text-center opacity-50 mb-6">Only the people below can open <b id="shareTripName"></b>.</p>
+        <div class="bg-white/70 rounded-3xl p-5 space-y-3 mb-6">
+            <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Invite link</p>
+            <p class="text-[11px] opacity-60">Send this link to friends. They open it, sign in with Google, and join this trip.</p>
+            <input id="inviteLink" type="text" readonly placeholder="No link yet" onclick="this.select()" class="!text-left !text-[12px]" style="background:#fff;border-radius:16px;padding:12px 14px;width:100%;outline:none">
+            <button onclick="copyInviteLink()" id="copyInviteBtn" class="btn-primary !py-3">COPY INVITE LINK</button>
+            <button onclick="resetInviteLink()" id="resetInviteBtn" class="w-full text-[10px] font-bold opacity-50">RESET LINK (the old link stops working)</button>
+        </div>
         <div id="shareList" class="space-y-2"></div>
-        <div class="flex gap-2 mt-4"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
+        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mt-4">Or add by email</p>
+        <div class="flex gap-2 mt-2"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 min-w-0 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
         <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
             <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
             <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
@@ -233,12 +241,39 @@
   let me = null;
   let userTripsRef = null, tripRefs = {}, tripData = {}, tripLoaded = {}, indexLoaded = false;
 
+  // Invite links look like  …/#join=<tripId>.<token>
+  (function readInviteFromUrl() {
+    const m = /[#&]join=(\d+)\.([0-9a-f]{32})/.exec(location.hash);
+    if (!m) return;
+    try { sessionStorage.setItem('tripLedger_join', m[1] + '.' + m[2]); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);
+  })();
+  function pendingInvite() { try { const v = sessionStorage.getItem('tripLedger_join'); return v ? v.split('.') : null; } catch (e) { return null; } }
+  async function acceptInvite() {
+    const inv = pendingInvite();
+    if (!inv || !me) return;
+    try { sessionStorage.removeItem('tripLedger_join'); } catch (e) {}
+    const [id, token] = inv;
+    try {
+        // proving the token lets us add ourselves to the trip, then list it under our account
+        await db.ref('ledgerTrips/' + id + '/joins/' + me.key).set(token);
+        await db.ref('ledgerTrips/' + id + '/allow/' + me.key).set(me.email);
+        await db.ref('ledgerUserTrips/' + me.key + '/' + id).set(true);
+        currentTripId = id; localStorage.setItem('tripLedger_currentId', id);
+        onTripsChanged();
+    } catch (e) {
+        alert('This invite link is no longer valid. Ask your friend for a new one.');
+    }
+  }
+  function newToken() { const a = new Uint8Array(16); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  function inviteUrl(t) { return t.invite ? `${location.origin}${location.pathname}#join=${t.id}.${t.invite}` : ''; }
+
   function emailKey(e) { return String(e || '').trim().toLowerCase().replace(/\./g, ','); }
 
   auth.onAuthStateChanged(user => {
     stopSync();
-    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); }
-    else { me = null; showGate('signin'); }
+    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); acceptInvite(); }
+    else { me = null; showGate(pendingInvite() ? 'invite' : 'signin'); }
   });
 
   function signIn() {
@@ -293,7 +328,8 @@
     document.getElementById('gate').classList.remove('hidden');
     const box = document.getElementById('gateBox');
     const title = '<p class="serif text-3xl font-bold">📜 Trip Ledger</p>';
-    if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
     else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
     else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
     else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
@@ -329,7 +365,12 @@
     state.targetCurr = document.getElementById('targetCurr').value;
     state.rateVal = parseFloat(document.getElementById('currentRateVal').value) || 1;
     const idx = trips.findIndex(t => t.id == currentTripId);
-    if (idx !== -1) { trips[idx] = state; tripData[state.id] = state; db.ref('ledgerTrips/' + state.id).set(state); }
+    if (idx !== -1) {
+        trips[idx] = state; tripData[state.id] = state;
+        // write everything except the sharing fields, so a stale copy never drops someone who just joined
+        const { allow, invite, joins, ...rest } = state;
+        db.ref('ledgerTrips/' + state.id).update(rest);
+    }
     renderTabs(); 
   }
 
@@ -474,8 +515,33 @@
     if (!me || !state) return;
     document.getElementById('shareTripName').innerText = state.name || 'this trip';
     document.getElementById('meEmail').innerText = me.email;
+    document.getElementById('inviteLink').value = inviteUrl(state);
+    document.getElementById('resetInviteBtn').classList.toggle('hidden', !state.invite);
     const entries = shareEntries = Object.entries(state.allow || {}).sort((a, b) => (a[0] === me.key ? -1 : b[0] === me.key ? 1 : a[1].localeCompare(b[1])));
     document.getElementById('shareList').innerHTML = entries.map(([k, email], i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="font-bold truncate">${esc(email)}${k === me.key ? ' <span class="opacity-40">(you)</span>' : ''}</span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3">${k === me.key ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
+  }
+  async function ensureInvite() {
+    if (!state.invite) {
+        const token = newToken();
+        await db.ref('ledgerTrips/' + state.id + '/invite').set(token);
+        state.invite = token;
+    }
+    return inviteUrl(state);
+  }
+  async function copyInviteLink() {
+    const url = await ensureInvite();
+    document.getElementById('inviteLink').value = url;
+    const btn = document.getElementById('copyInviteBtn');
+    try { await navigator.clipboard.writeText(url); btn.innerText = 'COPIED ✓'; }
+    catch (e) { document.getElementById('inviteLink').select(); btn.innerText = 'SELECT & COPY THE LINK ABOVE'; }
+    setTimeout(() => { btn.innerText = 'COPY INVITE LINK'; }, 2000);
+    renderShare();
+  }
+  async function resetInviteLink() {
+    if (!confirm('Make a new link? The old link will stop working (people who already joined stay in).')) return;
+    await db.ref('ledgerTrips/' + state.id + '/joins').remove();
+    await db.ref('ledgerTrips/' + state.id + '/invite').set(newToken());
+    renderShare();
   }
   async function addShare() {
     const email = document.getElementById('shareEmail').value.trim().toLowerCase();
