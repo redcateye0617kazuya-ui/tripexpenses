@@ -52,7 +52,7 @@
     .join-dot { width: 20px; height: 20px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--c); color: var(--c); background: white; }
     .join-dot.on { background: var(--c); color: white; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
-    #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
+    #planDate, #planRetDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
 </head>
 <body class="p-0">
@@ -188,10 +188,16 @@
         <input type="hidden" id="planId">
         <div class="space-y-6">
             <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">🛬 Arrive</button><button id="planTypeDepart" onclick="setPlanType('depart')" class="seg-btn">🛫 Depart</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
-            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
+            <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" onchange="prefillReturn()" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
             <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
             <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Note</p><input id="planNote" type="text" placeholder="Optional"></div>
+            <div id="planReturnSection" class="hidden bg-white/50 rounded-3xl p-4 space-y-4">
+                <input type="hidden" id="planRetId">
+                <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest ml-2">🛫 Return flight <span class="opacity-60 normal-case tracking-normal">(optional)</span></p>
+                <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planRetDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planRetTime"></div></div>
+                <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Leaving from</p><input id="planRetPlace" type="text" placeholder="Same as arrival if empty"></div>
+            </div>
             <div id="planCostSection" class="hidden"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">💰 Spent on this activity</p><div id="planCostList" class="space-y-2"></div><button onclick="addExpenseForPlan()" class="mt-3 text-[11px] font-bold opacity-70 w-full py-3 rounded-[20px] bg-white/70">+ ADD EXPENSE FOR THIS ACTIVITY</button></div>
         </div>
         <div class="flex gap-4 mt-10 pb-4"><button onclick="closePlanModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button><button onclick="savePlan()" class="flex-1 btn-primary">SAVE</button></div>
@@ -203,9 +209,17 @@
     <div class="bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 class="serif text-2xl mb-2 text-center font-bold">Who can see this trip</h3>
-        <p class="text-[11px] text-center opacity-50 mb-6">Only the people below can open <b id="shareTripName"></b>. Each person signs in with the Google account of that email.</p>
+        <p class="text-[11px] text-center opacity-50 mb-6">Only the people below can open <b id="shareTripName"></b>.</p>
+        <div class="bg-white/70 rounded-3xl p-5 space-y-3 mb-6">
+            <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Invite link</p>
+            <p class="text-[11px] opacity-60">Send this link to friends. They open it, sign in with Google, and join this trip.</p>
+            <input id="inviteLink" type="text" readonly placeholder="No link yet" onclick="this.select()" class="!text-left !text-[12px]" style="background:#fff;border-radius:16px;padding:12px 14px;width:100%;outline:none">
+            <button onclick="copyInviteLink()" id="copyInviteBtn" class="btn-primary !py-3">COPY INVITE LINK</button>
+            <button onclick="resetInviteLink()" id="resetInviteBtn" class="w-full text-[10px] font-bold opacity-50">RESET LINK (the old link stops working)</button>
+        </div>
         <div id="shareList" class="space-y-2"></div>
-        <div class="flex gap-2 mt-4"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
+        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mt-4">Or add by email</p>
+        <div class="flex gap-2 mt-2"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 min-w-0 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
         <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
             <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
             <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
@@ -233,12 +247,39 @@
   let me = null;
   let userTripsRef = null, tripRefs = {}, tripData = {}, tripLoaded = {}, indexLoaded = false;
 
+  // Invite links look like  …/#join=<tripId>.<token>
+  (function readInviteFromUrl() {
+    const m = /[#&]join=(\d+)\.([0-9a-f]{32})/.exec(location.hash);
+    if (!m) return;
+    try { sessionStorage.setItem('tripLedger_join', m[1] + '.' + m[2]); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);
+  })();
+  function pendingInvite() { try { const v = sessionStorage.getItem('tripLedger_join'); return v ? v.split('.') : null; } catch (e) { return null; } }
+  async function acceptInvite() {
+    const inv = pendingInvite();
+    if (!inv || !me) return;
+    try { sessionStorage.removeItem('tripLedger_join'); } catch (e) {}
+    const [id, token] = inv;
+    try {
+        // proving the token lets us add ourselves to the trip, then list it under our account
+        await db.ref('ledgerTrips/' + id + '/joins/' + me.key).set(token);
+        await db.ref('ledgerTrips/' + id + '/allow/' + me.key).set(me.email);
+        await db.ref('ledgerUserTrips/' + me.key + '/' + id).set(true);
+        currentTripId = id; localStorage.setItem('tripLedger_currentId', id);
+        onTripsChanged();
+    } catch (e) {
+        alert('This invite link is no longer valid. Ask your friend for a new one.');
+    }
+  }
+  function newToken() { const a = new Uint8Array(16); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  function inviteUrl(t) { return t.invite ? `${location.origin}${location.pathname}#join=${t.id}.${t.invite}` : ''; }
+
   function emailKey(e) { return String(e || '').trim().toLowerCase().replace(/\./g, ','); }
 
   auth.onAuthStateChanged(user => {
     stopSync();
-    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); }
-    else { me = null; showGate('signin'); }
+    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); acceptInvite(); }
+    else { me = null; showGate(pendingInvite() ? 'invite' : 'signin'); }
   });
 
   function signIn() {
@@ -293,7 +334,8 @@
     document.getElementById('gate').classList.remove('hidden');
     const box = document.getElementById('gateBox');
     const title = '<p class="serif text-3xl font-bold">📜 Trip Ledger</p>';
-    if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
     else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
     else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
     else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
@@ -329,7 +371,12 @@
     state.targetCurr = document.getElementById('targetCurr').value;
     state.rateVal = parseFloat(document.getElementById('currentRateVal').value) || 1;
     const idx = trips.findIndex(t => t.id == currentTripId);
-    if (idx !== -1) { trips[idx] = state; tripData[state.id] = state; db.ref('ledgerTrips/' + state.id).set(state); }
+    if (idx !== -1) {
+        trips[idx] = state; tripData[state.id] = state;
+        // write everything except the sharing fields, so a stale copy never drops someone who just joined
+        const { allow, invite, joins, ...rest } = state;
+        db.ref('ledgerTrips/' + state.id).update(rest);
+    }
     renderTabs(); 
   }
 
@@ -361,7 +408,7 @@
             const ds = fmtYMD(d); shownDates.add(ds);
             const dayExps = exps.filter(e => e.date === ds);
             h += `<div class="mb-8" ondragover="event.preventDefault(); this.classList.add('drop-zone-active')" ondragleave="this.classList.remove('drop-zone-active')" ondrop="handleDrop(event, '${ds}')">
-                    <div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${count}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${ds.replace(/-/g, '/')}</p></div>
+                    <div class="flex justify-between items-end gap-3 mb-4 px-2"><div class="flex items-center flex-wrap gap-x-2 gap-y-1 min-w-0"><p class="serif text-2xl font-bold mr-1">Day ${count}</p>${dayActivityTags(ds)}</div><p class="flex-shrink-0 text-[10px] opacity-40 font-bold tracking-widest uppercase pb-1">${ds.replace(/-/g, '/')}</p></div>
                     <div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div>
                     <button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button>
                   </div>`;
@@ -474,8 +521,33 @@
     if (!me || !state) return;
     document.getElementById('shareTripName').innerText = state.name || 'this trip';
     document.getElementById('meEmail').innerText = me.email;
+    document.getElementById('inviteLink').value = inviteUrl(state);
+    document.getElementById('resetInviteBtn').classList.toggle('hidden', !state.invite);
     const entries = shareEntries = Object.entries(state.allow || {}).sort((a, b) => (a[0] === me.key ? -1 : b[0] === me.key ? 1 : a[1].localeCompare(b[1])));
     document.getElementById('shareList').innerHTML = entries.map(([k, email], i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="font-bold truncate">${esc(email)}${k === me.key ? ' <span class="opacity-40">(you)</span>' : ''}</span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3">${k === me.key ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
+  }
+  async function ensureInvite() {
+    if (!state.invite) {
+        const token = newToken();
+        await db.ref('ledgerTrips/' + state.id + '/invite').set(token);
+        state.invite = token;
+    }
+    return inviteUrl(state);
+  }
+  async function copyInviteLink() {
+    const url = await ensureInvite();
+    document.getElementById('inviteLink').value = url;
+    const btn = document.getElementById('copyInviteBtn');
+    try { await navigator.clipboard.writeText(url); btn.innerText = 'COPIED ✓'; }
+    catch (e) { document.getElementById('inviteLink').select(); btn.innerText = 'SELECT & COPY THE LINK ABOVE'; }
+    setTimeout(() => { btn.innerText = 'COPY INVITE LINK'; }, 2000);
+    renderShare();
+  }
+  async function resetInviteLink() {
+    if (!confirm('Make a new link? The old link will stop working (people who already joined stay in).')) return;
+    await db.ref('ledgerTrips/' + state.id + '/joins').remove();
+    await db.ref('ledgerTrips/' + state.id + '/invite').set(newToken());
+    renderShare();
   }
   async function addShare() {
     const email = document.getElementById('shareEmail').value.trim().toLowerCase();
@@ -628,6 +700,13 @@
     } else p.with = [...(p.with || []), m];
     saveAll(); renderCalendar();
   }
+  // Small tags next to "Day N" in the Ledger: that day's calendar plans, one per activity
+  function dayActivityTags(ds) {
+    const seen = new Set();
+    return (state.plans || []).filter(p => p.date === ds).sort(sortPlans)
+        .filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; })
+        .map(p => { const c = memberColor(planPeople(p)[0]); return `<button onclick="openPlanModal('${p.id}')" class="text-[10px] font-bold px-2 py-0.5 rounded-full max-w-[160px] truncate" style="background:${c}22; color:#6d5d51; border:1px solid ${c}55">${isTravel(p) ? typeIcon(p) + ' ' : ''}${esc(p.place)}</button>`; }).join('');
+  }
   // Each person's plans for a day, one entry per activity
   function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
@@ -777,6 +856,8 @@
     document.getElementById('planTypeArrive').classList.toggle('active', t === 'arrive');
     document.getElementById('planTypeDepart').classList.toggle('active', t === 'depart');
     document.getElementById('planTypeVisit').classList.toggle('active', t === 'visit');
+    document.getElementById('planReturnSection').classList.toggle('hidden', t !== 'arrive');
+    if (t === 'arrive') prefillReturn();
     document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : t === 'depart' ? 'Leaving from' : 'Place';
   }
   function openPlanModal(id, presetDate, presetMemberIdx) {
@@ -799,10 +880,30 @@
     document.getElementById('planTime').value = p ? (p.time || '') : '';
     document.getElementById('planPlace').value = p ? p.place : '';
     document.getElementById('planNote').value = p ? (p.note || '') : '';
+    // Return flight: the depart linked to this arrival, or else this person's existing departure
+    const ret = p && p.type === 'arrive' ? returnPlanFor(p) : null;
+    document.getElementById('planRetId').value = ret ? ret.id : '';
+    document.getElementById('planRetDate').value = ret ? ret.date : '';
+    document.getElementById('planRetTime').value = ret ? (ret.time || '') : '';
+    document.getElementById('planRetPlace').value = ret ? ret.place : '';
     setPlanType(p ? p.type : 'visit');
     document.getElementById('planModal').classList.remove('hidden');
   }
   function closePlanModal() { document.getElementById('planModal').classList.add('hidden'); }
+  // New arrival: show the first ticked person's existing departure so it gets edited, not duplicated
+  function prefillReturn() {
+    if (planType !== 'arrive' || document.getElementById('planId').value) return;
+    const first = (document.querySelector('#planWho input:checked') || {}).value;
+    const ret = first ? returnPlanFor({ member: first }) : null;
+    document.getElementById('planRetId').value = ret ? ret.id : '';
+    document.getElementById('planRetDate').value = ret ? ret.date : '';
+    document.getElementById('planRetTime').value = ret ? (ret.time || '') : '';
+    document.getElementById('planRetPlace').value = ret ? ret.place : '';
+  }
+  function returnPlanFor(p) {
+    const plans = state.plans || [];
+    return (p.returnId != null && plans.find(x => x.id == p.returnId && x.type === 'depart')) || plans.find(x => x.type === 'depart' && x.member === p.member) || null;
+  }
   function savePlan() {
     const place = document.getElementById('planPlace').value.trim();
     const date = document.getElementById('planDate').value;
@@ -815,6 +916,22 @@
     const member = old && who.includes(old.member) ? old.member : who[0];
     const rec = { id: pid ? parseInt(pid) : Date.now(), date, type: planType, member, with: who.filter(m => m !== member), place, time: document.getElementById('planTime').value || '', note: document.getElementById('planNote').value.trim() };
     if (!state.plans) state.plans = [];
+    if (planType === 'arrive') {
+        // the arrival form can also hold the return flight: saved as that person's 🛫 Depart plan
+        const retDate = document.getElementById('planRetDate').value;
+        const retId = document.getElementById('planRetId').value;
+        if (retDate) {
+            if (retDate < date) { alert('The return date is before the arrival date.'); return; }
+            const oldRet = retId ? state.plans.find(x => x.id == retId) : null;
+            const ret = { id: oldRet ? oldRet.id : rec.id + 1, date: retDate, type: 'depart', member, with: rec.with, place: document.getElementById('planRetPlace').value.trim() || place, time: document.getElementById('planRetTime').value || '', note: oldRet ? (oldRet.note || '') : '' };
+            const j = state.plans.findIndex(x => x.id == ret.id);
+            if (j !== -1) state.plans[j] = ret; else state.plans.push(ret);
+            rec.returnId = ret.id;
+        } else if (retId) {
+            // return date cleared: drop that departure
+            state.plans = state.plans.filter(x => x.id != retId);
+        }
+    }
     const i = pid ? state.plans.findIndex(p => p.id == pid) : -1;
     if (i !== -1) state.plans[i] = rec; else state.plans.push(rec);
     calSelected = date; const d = parseYMD(date); calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
