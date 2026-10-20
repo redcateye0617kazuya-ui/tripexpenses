@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
     :root { --bg-cream: #f1ede4; --main-brown: #6d5d51; --accent-tan: #d9cfc1; --soft-white: rgba(255, 255, 255, 0.9); }
@@ -48,6 +49,9 @@
     .master-table .out-trip { opacity: 0.55; }
     .master-table tr.is-today .name-col { box-shadow: inset 3px 0 0 var(--main-brown); }
     .master-table .spend-col { background: #faf8f4; }
+    .join-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+    .join-dot { width: 20px; height: 20px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--c); color: var(--c); background: white; }
+    .join-dot.on { background: var(--c); color: white; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
   </style>
@@ -56,10 +60,11 @@
 
   <div class="jump-btn" onclick="document.getElementById('settlementArea').scrollIntoView()">↓</div>
 
-  <main class="max-w-md mx-auto min-h-screen flex flex-col">
+  <main class="max-w-md md:max-w-3xl lg:max-w-5xl mx-auto min-h-screen flex flex-col">
     <div class="flex overflow-x-auto px-4 py-4 gap-2 custom-scroll">
         <div id="tabContainer" class="flex gap-2"></div>
         <button onclick="addNewTrip()" class="w-10 h-10 flex-shrink-0 bg-white/50 rounded-full font-bold opacity-50">+</button>
+        <button onclick="openShareModal()" class="h-10 px-4 flex-shrink-0 bg-white rounded-full text-[11px] font-bold shadow-sm ml-auto whitespace-nowrap">👥 Share</button>
     </div>
 
     <div class="px-6 py-2 space-y-4">
@@ -156,8 +161,8 @@
     </div>
   </main>
 
-  <div id="modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end">
-    <div class="bg-[#f1ede4] w-full rounded-t-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+  <div id="modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
+    <div class="bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 id="modalTitle" class="serif text-2xl mb-8 text-center font-bold">Record</h3>
         <input type="hidden" id="exDate"><input type="hidden" id="exId"> 
@@ -177,8 +182,8 @@
     </div>
   </div>
 
-  <div id="planModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end">
-    <div class="bg-[#f1ede4] w-full rounded-t-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+  <div id="planModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
+    <div class="bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 id="planModalTitle" class="serif text-2xl mb-8 text-center font-bold">Plan</h3>
         <input type="hidden" id="planId">
@@ -195,30 +200,105 @@
     </div>
   </div>
 
+  <div id="shareModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
+    <div class="bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
+        <h3 class="serif text-2xl mb-2 text-center font-bold">Who can see this trip</h3>
+        <p class="text-[11px] text-center opacity-50 mb-6">Only the people below can open <b id="shareTripName"></b>. Each person signs in with the Google account of that email.</p>
+        <div id="shareList" class="space-y-2"></div>
+        <div class="flex gap-2 mt-4"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
+        <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
+            <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
+            <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
+            <button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>
+        </div>
+        <div class="flex gap-4 mt-6 pb-2"><button onclick="closeShareModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button></div>
+    </div>
+  </div>
+
+  <div id="gate" class="fixed inset-0 z-40 bg-[#f1ede4] flex items-center justify-center p-6"><div id="gateBox" class="app-card p-8 w-full max-w-sm text-center space-y-5"><p class="opacity-40 text-sm">Loading…</p></div></div>
+
 <script>
   const firebaseConfig = { apiKey: "AIzaSyB_ni1Eypuaq1axtilczSo8gjdZk7_Rge4", authDomain: "trip-planner-813fe.firebaseapp.com", databaseURL: "https://trip-planner-813fe-default-rtdb.firebaseio.com", projectId: "trip-planner-813fe", storageBucket: "trip-planner-813fe.firebasestorage.app", messagingSenderId: "606499488470", appId: "1:606499488470:web:e744bc3964fa4a54ae7f77", measurementId: "G-CTQHRMRTK2" };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
-  const dbPath = db.ref('tripLedgerData/trips');
+  const auth = firebase.auth();
 
+  // Each trip lives at ledgerTrips/<id> with an allow-list of emails (allow/<emailKey>: email).
+  // ledgerUserTrips/<emailKey>/<id> lists the trips each person can open. The database rules check the allow-list,
+  // so people only ever receive the trips they were added to.
   let trips = [];
   let currentTripId = localStorage.getItem('tripLedger_currentId');
   let state = {};
+  let me = null;
+  let userTripsRef = null, tripRefs = {}, tripData = {}, tripLoaded = {}, indexLoaded = false;
 
-  dbPath.on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-        trips = data;
-        if (!currentTripId || !trips.find(t => t.id == currentTripId)) {
-            currentTripId = trips[0].id;
-            localStorage.setItem('tripLedger_currentId', currentTripId);
-        }
-        init();
-    } else {
-        trips = [{ id: Date.now(), name: "New Trip", members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }];
-        dbPath.set(trips);
-    }
+  function emailKey(e) { return String(e || '').trim().toLowerCase().replace(/\./g, ','); }
+
+  auth.onAuthStateChanged(user => {
+    stopSync();
+    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); }
+    else { me = null; showGate('signin'); }
   });
+
+  function signIn() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(e => {
+      if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) auth.signInWithRedirect(provider);
+      else if (e.code !== 'auth/popup-closed-by-user') alert(e.message);
+    });
+  }
+  function signOut() { closeShareModal(); auth.signOut(); }
+
+  function stopSync() {
+    if (userTripsRef) userTripsRef.off();
+    Object.values(tripRefs).forEach(r => r.off());
+    userTripsRef = null; tripRefs = {}; tripData = {}; tripLoaded = {}; indexLoaded = false; trips = []; state = {};
+  }
+  function startSync() {
+    showGate('loading');
+    userTripsRef = db.ref('ledgerUserTrips/' + me.key);
+    userTripsRef.on('value', snap => {
+        const ids = Object.keys(snap.val() || {});
+        ids.forEach(id => {
+            if (tripRefs[id]) return;
+            const ref = db.ref('ledgerTrips/' + id);
+            tripRefs[id] = ref;
+            ref.on('value', s => {
+                tripLoaded[id] = true;
+                if (s.val()) tripData[id] = s.val(); else delete tripData[id];
+                onTripsChanged();
+            }, () => { tripLoaded[id] = true; delete tripData[id]; onTripsChanged(); });
+        });
+        Object.keys(tripRefs).forEach(id => { if (!ids.includes(id)) { tripRefs[id].off(); delete tripRefs[id]; delete tripData[id]; delete tripLoaded[id]; } });
+        indexLoaded = true; onTripsChanged();
+    }, err => showGate('error', err && err.message));
+  }
+  function onTripsChanged() {
+    trips = Object.values(tripData).filter(t => t && t.id != null).sort((a, b) => a.id - b.id);
+    const pending = Object.keys(tripRefs).some(id => !tripLoaded[id]);
+    if (!indexLoaded || (pending && !trips.length)) return showGate('loading');
+    if (!trips.length) return showGate('empty');
+    // a trip that was just created or opened is still loading: wait for it instead of jumping to another trip
+    if (currentTripId && tripRefs[currentTripId] && !tripLoaded[currentTripId]) return;
+    hideGate();
+    if (!currentTripId || !trips.find(t => t.id == currentTripId)) {
+        currentTripId = trips[0].id;
+        localStorage.setItem('tripLedger_currentId', currentTripId);
+    }
+    init();
+  }
+
+  function showGate(mode, msg) {
+    document.getElementById('gate').classList.remove('hidden');
+    const box = document.getElementById('gateBox');
+    const title = '<p class="serif text-3xl font-bold">📜 Trip Ledger</p>';
+    if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
+    else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
+    else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
+  }
+  function hideGate() { document.getElementById('gate').classList.add('hidden'); }
 
   function init() {
     state = trips.find(t => t.id == currentTripId) || trips[0];
@@ -229,6 +309,7 @@
     // Firebase drops empty arrays, so an expense saved with no splitees comes back without splitWith
     state.expenses.forEach(e => { if (!e.splitWith) e.splitWith = []; });
     renderTabs(); syncUI();
+    if (!document.getElementById('shareModal').classList.contains('hidden')) renderShare();
   }
 
   function renderTabs() {
@@ -240,6 +321,7 @@
   function switchTrip(id) { currentTripId = id; localStorage.setItem('tripLedger_currentId', id); init(); }
 
   function saveAll() {
+    if (!state || state.id == null) return;
     state.name = document.getElementById('tripName').value;
     state.tripName = state.name;
     state.startDate = document.getElementById('startDate').value;
@@ -247,7 +329,7 @@
     state.targetCurr = document.getElementById('targetCurr').value;
     state.rateVal = parseFloat(document.getElementById('currentRateVal').value) || 1;
     const idx = trips.findIndex(t => t.id == currentTripId);
-    if (idx !== -1) { trips[idx] = state; dbPath.set(trips); }
+    if (idx !== -1) { trips[idx] = state; tripData[state.id] = state; db.ref('ledgerTrips/' + state.id).set(state); }
     renderTabs(); 
   }
 
@@ -371,8 +453,71 @@
   function closeModal() { document.getElementById('modal').classList.add('hidden'); }
   function togglePoolPayer(isP) { document.getElementById('personalPayerFields').style.display = isP ? 'none' : 'grid'; document.getElementById('exPayer').innerHTML = (state.members || []).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join(''); document.getElementById('modalSplit').innerHTML = (state.members || []).map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${esc(m)}" checked> <span class="text-xs font-bold">${esc(m)}</span></label>`).join(''); }
   function saveRecord() { const amt = parseFloat(document.getElementById('exAmt').value); const curr = document.getElementById('exCurr').value; const date = document.getElementById('exDate').value; const eid = document.getElementById('exId').value; if (!amt) return; if (date === 'DEPOSIT') { if (eid) { const i = state.poolDeposits.findIndex(d => d.id == eid); state.poolDeposits[i] = { id: parseInt(eid), amt, curr }; } else state.poolDeposits.push({ id: Date.now(), amt, curr }); } else { const sw = Array.from(document.querySelectorAll('#modalSplit input:checked')).map(i => i.value); const isPool = document.getElementById('usePool').checked; if (!isPool && !document.getElementById('exPayer').value) { alert('Add a member first.'); return; } if (!isPool && !sw.length) { alert('Pick at least one splitee.'); return; } const rec = { id: eid ? parseInt(eid) : Date.now(), date, desc: document.getElementById('exDesc').value || 'Exp', amt, curr, payer: document.getElementById('exPayer').value, splitWith: sw, isPool: document.getElementById('usePool').checked }; const planId = parseInt(document.getElementById('exPlan').value); if (planId && !document.getElementById('exPlanRow').classList.contains('hidden')) rec.planId = planId; if (eid) { const i = state.expenses.findIndex(e => e.id == eid); state.expenses[i] = rec; } else state.expenses.push(rec); } closeModal(); saveAll(); }
-  function addNewTrip() { const newId = Date.now(); trips.push({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3 }); currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId); dbPath.set(trips); }
-  function deleteCurrentTrip() { if (trips.length <= 1) return; if (confirm("Delete this trip?")) { trips = trips.filter(t => t.id != currentTripId); currentTripId = trips[0].id; localStorage.setItem('tripLedger_currentId', currentTripId); dbPath.set(trips); } }
+  async function addNewTrip() {
+    if (!me) return;
+    const newId = Date.now();
+    currentTripId = newId; localStorage.setItem('tripLedger_currentId', newId);
+    await db.ref('ledgerTrips/' + newId).set({ id: newId, name: 'New Trip', members: [], expenses: [], poolDeposits: [], targetCurr: 'JPY', rateVal: 19.3, allow: { [me.key]: me.email } });
+    await db.ref('ledgerUserTrips/' + me.key + '/' + newId).set(true);
+  }
+  async function deleteCurrentTrip() {
+    if (!confirm(`Delete "${state.name || 'this trip'}" for everyone in it?`)) return;
+    const t = state;
+    for (const k of Object.keys(t.allow || {})) await db.ref('ledgerUserTrips/' + k + '/' + t.id).remove().catch(() => {});
+    await db.ref('ledgerTrips/' + t.id).remove();
+  }
+
+  // ---------- Sharing ----------
+  function openShareModal() { if (!state || state.id == null) return; renderShare(); document.getElementById('shareModal').classList.remove('hidden'); }
+  function closeShareModal() { document.getElementById('shareModal').classList.add('hidden'); }
+  function renderShare() {
+    if (!me || !state) return;
+    document.getElementById('shareTripName').innerText = state.name || 'this trip';
+    document.getElementById('meEmail').innerText = me.email;
+    const entries = shareEntries = Object.entries(state.allow || {}).sort((a, b) => (a[0] === me.key ? -1 : b[0] === me.key ? 1 : a[1].localeCompare(b[1])));
+    document.getElementById('shareList').innerHTML = entries.map(([k, email], i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="font-bold truncate">${esc(email)}${k === me.key ? ' <span class="opacity-40">(you)</span>' : ''}</span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3">${k === me.key ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
+  }
+  async function addShare() {
+    const email = document.getElementById('shareEmail').value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Enter an email address.'); return; }
+    const k = emailKey(email);
+    if ((state.allow || {})[k]) { alert('Already added.'); return; }
+    await db.ref('ledgerTrips/' + state.id + '/allow/' + k).set(email);
+    await db.ref('ledgerUserTrips/' + k + '/' + state.id).set(true);
+    document.getElementById('shareEmail').value = ''; renderShare();
+  }
+  let shareEntries = [];
+  async function removeShare(i) {
+    const k = (shareEntries[i] || [])[0];
+    if (!k) return;
+    const self = k === me.key, allow = state.allow || {};
+    if (self && Object.keys(allow).length <= 1) { alert("You're the only one in this trip. Use DELETE TRIP instead."); return; }
+    if (!confirm(self ? `Leave "${state.name}"? You won't see it any more.` : `Remove ${allow[k]} from "${state.name}"?`)) return;
+    const id = state.id;
+    await db.ref('ledgerUserTrips/' + k + '/' + id).remove();
+    await db.ref('ledgerTrips/' + id + '/allow/' + k).remove();
+    if (self) closeShareModal(); else renderShare();
+  }
+  // One person imports the trips from the old shared list, then shares each trip with friends
+  async function importLegacyTrips() {
+    let snap;
+    try { snap = await db.ref('tripLedgerData/trips').get(); } catch (e) { alert("Couldn't read the old trips (they may already be locked)."); return; }
+    const old = Object.values(snap.val() || {}).filter(t => t && typeof t === 'object');
+    if (!old.length) { alert('No old trips found.'); return; }
+    if (!confirm(`Import ${old.length} trip(s) from the old version into your account? Only one person needs to do this; then use 👥 Share to add your friends.`)) return;
+    let n = 0, skipped = 0;
+    for (const t of old) {
+        let id = t.id || Date.now() + n;
+        try {
+            const ex = await db.ref('ledgerTrips/' + id).get();
+            if (ex.exists()) { if ((ex.val().allow || {})[me.key]) { skipped++; continue; } id = Date.now() + n; }
+        } catch (e) { id = Date.now() + n; }
+        await db.ref('ledgerTrips/' + id).set({ ...t, id, allow: { [me.key]: me.email } });
+        await db.ref('ledgerUserTrips/' + me.key + '/' + id).set(true);
+        n++;
+    }
+    alert(`Imported ${n} trip(s).${skipped ? ` ${skipped} were already in your account.` : ''}`);
+  }
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; if (!(await fetchLiveRate())) saveAll(); }
   async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); return true; } } catch (e) {} return false; }
   function addMember() { const n = (prompt("Name?") || '').trim(); if(n) { if (state.members.includes(n)) { alert(`${n} already exists.`); return; } state.members.push(n); saveAll(); } }
@@ -456,6 +601,28 @@
     const people = planPeople(p), cost = planExpenses(p).reduce((t, e) => t + toHKD(e.amt, e.curr), 0);
     const cls = small ? 'block text-[9px] opacity-70' : 'text-[10px] opacity-70 font-bold';
     return (people.length >= 2 ? `<span class="${cls}">👥 ${people.map(esc).join(', ')}</span>` : '') + (cost ? `<span class="${cls}">💰 HKD ${Math.round(cost).toLocaleString()}</span>` : '');
+  }
+  // Tick / untick anyone in a "want to go" activity
+  function joinRow(p) {
+    if (p.type === 'arrive') return '';
+    const people = planPeople(p);
+    return `<span class="join-row">${(state.members || []).map((m, i) => `<button onclick="event.stopPropagation(); togglePlanPerson('${p.id}', ${i})" class="join-dot ${people.includes(m) ? 'on' : ''}" style="--c:${memberColor(m)}" title="${esc(m)}">${esc([...m][0] || '?').toUpperCase()}</button>`).join('')}</span>`;
+  }
+  function togglePlanPerson(id, mi) {
+    const p = (state.plans || []).find(x => x.id == id), m = (state.members || [])[mi];
+    if (!p || m === undefined) return;
+    const group = samePlanGroup(p);
+    if (planPeople(p).includes(m)) {
+        if (planPeople(p).length <= 1) { alert('Someone needs to be in it. Delete the plan instead.'); return; }
+        group.forEach(q => { q.with = (q.with || []).filter(x => x !== m); if (q.member === m) q.member = q.with.shift() || null; });
+        // records left with nobody go away; their linked expenses move to a record that's left
+        const keep = group.find(q => q.member);
+        group.filter(q => !q.member).forEach(q => {
+            (state.expenses || []).forEach(e => { if (e.planId == q.id) e.planId = keep.id; });
+            state.plans = state.plans.filter(x => x.id !== q.id);
+        });
+    } else p.with = [...(p.with || []), m];
+    saveAll(); renderCalendar();
   }
   // Each person's plans for a day, one entry per activity
   function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); }
@@ -552,7 +719,7 @@
             ${items.map(p => `<div class="flex justify-between items-center gap-3">
                 <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '✈ Arrive · ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
                 ${p.time || p.note ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.time || '')}${p.time && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
-                <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p></div>
+                <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p>${joinRow(p)}</div>
                 <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
               </div>`).join('')}
           </div>`).join('') : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
@@ -593,7 +760,7 @@
             ${people.map(m => {
                 const c = memberColor(m), mi = members.indexOf(m);
                 const add = r.ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${r.ds}', ${mi})"` : '';
-                return `<td class="member-cell" ${add}>${plansFor(byDay[r.ds] || [], m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}${planExtras(p, true)}</span>`).join('')}</td>`;
+                return `<td class="member-cell" ${add}>${plansFor(byDay[r.ds] || [], m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}${planExtras(p, true)}${joinRow(p)}</span>`).join('')}</td>`;
             }).join('')}
             <td class="member-cell spend-col" onclick="openModal('${r.ds}')">${r.dayExps.map(e => {
                 const c = e.isPool ? '#d1a54a' : memberColor(e.payer);
