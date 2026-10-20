@@ -35,7 +35,7 @@
     .cal-cell.today .cal-num { background: var(--accent-tan); }
     .cal-num { font-size: 11px; font-weight: 700; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; }
     .plan-mark { font-size: 9px; line-height: 1; }
-    .seg-btn { flex: 1; padding: 12px; border-radius: 16px; font-size: 13px; font-weight: 700; background: white; opacity: 0.5; }
+    .seg-btn { flex: 1; padding: 12px 6px; border-radius: 16px; font-size: 12px; white-space: nowrap; font-weight: 700; background: white; opacity: 0.5; }
     .seg-btn.active { background: var(--main-brown); color: white; opacity: 1; }
     input[type="time"] { background: #ffffff; border-radius: 20px; padding: 14px 18px; font-size: 16px !important; color: var(--main-brown); width: 100%; border: none; text-align: center; }
     .master-wrap { overflow-x: auto; border-radius: 20px; }
@@ -48,7 +48,6 @@
     .master-table td.member-cell { min-width: 104px; max-width: 140px; cursor: pointer; }
     .master-table .out-trip { opacity: 0.55; }
     .master-table tr.is-today .name-col { box-shadow: inset 3px 0 0 var(--main-brown); }
-    .master-table .spend-col { background: #faf8f4; }
     .join-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
     .join-dot { width: 20px; height: 20px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--c); color: var(--c); background: white; }
     .join-dot.on { background: var(--c); color: white; }
@@ -79,8 +78,8 @@
           <button onclick="fetchLiveRate()" class="text-[9px] bg-white px-3 py-2 rounded-full font-bold shadow-sm">Live</button>
       </div>
       <div class="flex bg-white/40 p-1 rounded-full">
-          <button id="viewTabLedger" onclick="setView('ledger')" class="view-tab flex-1 active">💰 Ledger</button>
-          <button id="viewTabCalendar" onclick="setView('calendar')" class="view-tab flex-1">📅 Calendar</button>
+          <button id="viewTabLedger" onclick="setView('ledger')" class="view-tab flex-1 active">Ledger</button>
+          <button id="viewTabCalendar" onclick="setView('calendar')" class="view-tab flex-1">Calendar</button>
       </div>
     </div>
 
@@ -134,12 +133,12 @@
             <div id="arrivalSummary"></div>
             <div id="calFilter" class="flex flex-wrap gap-2 justify-center"></div>
             <div class="flex bg-white/40 p-1 rounded-full">
-                <button id="calModeMaster" onclick="setCalMode('master')" class="view-tab flex-1">🗂 Master</button>
-                <button id="calModeMonth" onclick="setCalMode('month')" class="view-tab flex-1">🗓 Month</button>
+                <button id="calModeMaster" onclick="setCalMode('master')" class="view-tab flex-1">Master</button>
+                <button id="calModeMonth" onclick="setCalMode('month')" class="view-tab flex-1">Month</button>
             </div>
             <div id="masterView" class="space-y-3">
                 <div class="app-card p-2"><div class="master-wrap"><table class="master-table"><thead id="masterHead"></thead><tbody id="masterBody"></tbody></table></div></div>
-                <p class="text-[9px] text-center opacity-40 font-bold">Tap an empty box to add · tap a plan or expense to edit</p>
+                <p class="text-[9px] text-center opacity-40 font-bold">Tap an empty box to add a plan · tap a plan or 💰 expense to edit</p>
                 <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
                 <div id="calSummary"></div>
             </div>
@@ -152,7 +151,7 @@
                 </div>
                 <div class="grid grid-cols-7 gap-1 text-center text-[9px] font-bold opacity-40"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
                 <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
-                <p class="text-[9px] text-center opacity-40 font-bold">✈ Arrive &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
+                <p class="text-[9px] text-center opacity-40 font-bold">🛬 Arrive &nbsp;•&nbsp; 🛫 Depart &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
             </div>
             <div id="calDayDetail"></div>
             </div>
@@ -188,7 +187,7 @@
         <h3 id="planModalTitle" class="serif text-2xl mb-8 text-center font-bold">Plan</h3>
         <input type="hidden" id="planId">
         <div class="space-y-6">
-            <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">✈ Arrive</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
+            <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">🛬 Arrive</button><button id="planTypeDepart" onclick="setPlanType('depart')" class="seg-btn">🛫 Depart</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
             <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
             <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
@@ -210,6 +209,7 @@
         <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
             <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
             <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
+            <button onclick="closeShareModal(); deleteCurrentTrip()" class="w-full text-[10px] text-red-400 font-bold py-2">DELETE THIS TRIP FOR EVERYONE</button>
             <button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>
         </div>
         <div class="flex gap-4 mt-6 pb-2"><button onclick="closeShareModal()" class="flex-1 py-4 text-sm font-bold opacity-40">Close</button></div>
@@ -314,7 +314,7 @@
 
   function renderTabs() {
     document.getElementById('tabContainer').innerHTML = trips.map(t => 
-      `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''}">${esc(t.name || 'Untitled')}</div>`
+      `<div onclick="switchTrip(${t.id})" class="trip-tab ${t.id == currentTripId ? 'active' : ''} flex items-center gap-2">${esc(t.name || 'Untitled')}${t.id == currentTripId ? `<button onclick="event.stopPropagation(); deleteCurrentTrip()" title="Delete this trip" class="w-5 h-5 -mr-2 rounded-full text-[11px] leading-5 text-center opacity-40 hover:opacity-100 hover:bg-red-50 hover:text-red-500">✕</button>` : ''}</div>`
     ).join('');
   }
 
@@ -581,7 +581,11 @@
   try { calMode = localStorage.getItem('tripLedger_calMode') || 'master'; } catch (e) {}
   function setCalMode(m) { calMode = m; try { localStorage.setItem('tripLedger_calMode', m); } catch (e) {} renderCalendar(); }
   function memberColor(m) { const i = (state.members || []).indexOf(m); return i < 0 ? '#b5aca3' : MEMBER_COLORS[i % MEMBER_COLORS.length]; }
-  function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || (a.type === 'arrive' ? 0 : 1) - (b.type === 'arrive' ? 0 : 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
+  // Arrive / depart are travel legs (no join ticks); 'visit' is a want-to-go activity
+  function isTravel(p) { return p.type === 'arrive' || p.type === 'depart'; }
+  function typeIcon(p) { return p.type === 'arrive' ? '🛬' : p.type === 'depart' ? '🛫' : '📍'; }
+  const TYPE_ORDER = { arrive: 0, visit: 1, depart: 2 };
+  function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
   function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
   function fmtShort(ds) { const d = parseYMD(ds); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ds; }
 
@@ -604,7 +608,7 @@
   }
   // Tick / untick anyone in a "want to go" activity
   function joinRow(p) {
-    if (p.type === 'arrive') return '';
+    if (isTravel(p)) return '';
     const people = planPeople(p);
     return `<span class="join-row">${(state.members || []).map((m, i) => `<button onclick="event.stopPropagation(); togglePlanPerson('${p.id}', ${i})" class="join-dot ${people.includes(m) ? 'on' : ''}" style="--c:${memberColor(m)}" title="${esc(m)}">${esc([...m][0] || '?').toUpperCase()}</button>`).join('')}</span>`;
   }
@@ -634,7 +638,7 @@
     const sel = selectedId != null ? (state.plans || []).find(p => p.id == selectedId) : null;
     if (sel && !opts.some(p => samePlanGroup(p).some(q => q.id == sel.id))) opts.push(sel);
     row.classList.toggle('hidden', !opts.length);
-    document.getElementById('exPlan').innerHTML = '<option value="">— None —</option>' + opts.map(p => `<option value="${p.id}">${p.type === 'arrive' ? '✈ ' : '📍 '}${esc(p.place)}</option>`).join('');
+    document.getElementById('exPlan').innerHTML = '<option value="">— None —</option>' + opts.map(p => `<option value="${p.id}">${typeIcon(p)} ${esc(p.place)}</option>`).join('');
     const match = sel ? opts.find(p => samePlanGroup(p).some(q => q.id == sel.id)) : null;
     document.getElementById('exPlan').value = match ? match.id : '';
   }
@@ -667,15 +671,13 @@
     const byDate = {};
     plans.forEach(p => (byDate[p.date] = byDate[p.date] || []).push(p));
 
-    // Arrival summary: where & when each person lands
-    const arrivals = allPlans.filter(p => p.type === 'arrive');
+    // Arrivals & departures: when and where each person lands and leaves
     const members = state.members || [];
+    const legs = (m, type) => plansFor(allPlans.filter(p => p.type === type), m);
+    const legLine = (label, list) => `<div class="flex gap-2"><span class="w-12 flex-shrink-0 text-[9px] font-bold uppercase opacity-40 pt-0.5">${label}</span><div class="flex-1 space-y-0.5">${list.length ? list.map(p => `<p><span class="font-bold opacity-60">${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''}</span> · ${esc(p.place)}</p>`).join('') : '<p class="opacity-30 italic">Not set</p>'}</div></div>`;
     document.getElementById('arrivalSummary').innerHTML = members.length ? `<div class="app-card p-5 space-y-3">
-        <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">✈ Arrivals</p>
-        ${members.map(m => {
-            const mine = plansFor(arrivals, m);
-            return `<div class="flex items-start gap-3 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-16 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 space-y-1">${mine.length ? mine.map(p => `<p><span class="font-bold opacity-60">${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''}</span> · ${esc(p.place)}</p>`).join('') : '<p class="opacity-30 italic">Not set</p>'}</div></div>`;
-        }).join('')}
+        <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Arrivals &amp; Departures</p>
+        ${members.map(m => `<div class="flex items-start gap-3 text-xs"><span class="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style="background:${memberColor(m)}"></span><b class="w-16 flex-shrink-0 truncate">${esc(m)}</b><div class="flex-1 space-y-1">${legLine('Arrive', legs(m, 'arrive'))}${legLine('Depart', legs(m, 'depart'))}</div></div>`).join('')}
       </div>` : '<p class="text-center py-2 text-[11px] opacity-40 italic">Add members (+ above) to start planning</p>';
 
     // Filter chips
@@ -698,7 +700,7 @@
     for (let day = 1; day <= days; day++) {
         const d = new Date(y, mo, day), ds = fmtYMD(d);
         const inTrip = hasRange && d >= start && d <= end;
-        const marks = (state.members || []).concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !(state.members || []).includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type === 'arrive' ? '✈' : '●'}</span>`)).join('');
+        const marks = (state.members || []).concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !(state.members || []).includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${isTravel(p) ? typeIcon(p) : '●'}</span>`)).join('');
         g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
                 <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
                 <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
@@ -717,7 +719,7 @@
         ${groups.length ? groups.map(({ m, items }) => `<div class="app-card p-5 space-y-3">
             <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span><p class="font-bold text-sm">${esc(m)}</p></div>
             ${items.map(p => `<div class="flex justify-between items-center gap-3">
-                <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '✈ Arrive · ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
+                <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '🛬 Arrive · ' : p.type === 'depart' ? '🛫 Depart · ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
                 ${p.time || p.note ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.time || '')}${p.time && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
                 <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p>${joinRow(p)}</div>
                 <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
@@ -730,17 +732,17 @@
   // then the day's spending and total
   function renderMaster(plans, start, end, hasRange) {
     const members = state.members || [];
-    const exps = state.expenses || [];
-    const fmt = n => Math.round(n).toLocaleString();
     const people = calFilter === 'ALL' ? [...new Set([...members, ...plans.flatMap(planPeople)])] : [calFilter];
-    const dates = new Set([...plans.map(p => p.date), ...exps.map(e => e.date)].filter(d => parseYMD(d)));
+    // Personal expenses sit in the payer's box on that day; pool-paid ones aren't shown here
+    const paid = (state.expenses || []).filter(e => !e.isPool && people.includes(e.payer));
+    const dates = new Set([...plans.map(p => p.date), ...paid.map(e => e.date)].filter(d => parseYMD(d)));
     if (hasRange) for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) dates.add(fmtYMD(d));
-    const rows = [...(exps.some(e => e.date === 'PRE') ? ['PRE'] : []), ...[...dates].sort()].map(ds => {
+    const rows = [...(paid.some(e => e.date === 'PRE') ? ['PRE'] : []), ...[...dates].sort()].map(ds => {
         const d = parseYMD(ds);
         const inTrip = hasRange && d && d >= start && d <= end;
-        const dayExps = exps.filter(e => e.date === ds);
-        return { ds, d, inTrip, dim: ds !== 'PRE' && !inTrip, dayNo: inTrip ? Math.round((d - start) / 86400000) + 1 : null, dayExps, total: dayExps.reduce((t, e) => t + toHKD(e.amt, e.curr), 0) };
+        return { ds, d, dim: ds !== 'PRE' && !inTrip, dayNo: inTrip ? Math.round((d - start) / 86400000) + 1 : null };
     });
+    const expChip = (e, c) => `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="background:#f1ede4; border-left:3px dashed ${c}">💰 ${esc(e.desc)}<span class="block text-[9px] opacity-60">${esc(e.curr)} ${Number(e.amt).toLocaleString()}${planOf(e) ? ' · 📍 ' + esc(planOf(e).place) : ''}</span></span>`;
     const today = fmtYMD(new Date());
     renderTripSummary();
     if (!rows.length) {
@@ -748,7 +750,7 @@
         document.getElementById('masterBody').innerHTML = `<tr><td class="text-center py-6 opacity-40 italic">Set trip dates or add a plan</td></tr>`;
         return;
     }
-    document.getElementById('masterHead').innerHTML = `<tr><th class="name-col"><span class="text-[9px] opacity-50 uppercase">Date</span></th>${people.map(m => `<th><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span></th>`).join('')}<th class="spend-col">💰 Spent</th><th class="spend-col">Σ Total</th></tr>`;
+    document.getElementById('masterHead').innerHTML = `<tr><th class="name-col"><span class="text-[9px] opacity-50 uppercase">Date</span></th>${people.map(m => `<th><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span></th>`).join('')}</tr>`;
     const byDay = {};
     plans.forEach(p => (byDay[p.date] = byDay[p.date] || []).push(p));
     document.getElementById('masterBody').innerHTML = rows.map(r => {
@@ -760,13 +762,8 @@
             ${people.map(m => {
                 const c = memberColor(m), mi = members.indexOf(m);
                 const add = r.ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${r.ds}', ${mi})"` : '';
-                return `<td class="member-cell" ${add}>${plansFor(byDay[r.ds] || [], m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${p.type === 'arrive' ? '✈ ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}${planExtras(p, true)}${joinRow(p)}</span>`).join('')}</td>`;
+                return `<td class="member-cell" ${add}>${plansFor(byDay[r.ds] || [], m).map(p => `<span onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="plan-chip" style="background:${c}22; border-left:3px solid ${c}">${isTravel(p) ? typeIcon(p) + ' ' : ''}${esc(p.place)}${p.time ? `<span class="block text-[9px] opacity-60">${esc(p.time)}</span>` : ''}${planExtras(p, true)}${joinRow(p)}</span>`).join('')}${paid.filter(e => e.date === r.ds && e.payer === m).map(e => expChip(e, c)).join('')}</td>`;
             }).join('')}
-            <td class="member-cell spend-col" onclick="openModal('${r.ds}')">${r.dayExps.map(e => {
-                const c = e.isPool ? '#d1a54a' : memberColor(e.payer);
-                return `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="background:#f1ede4; border-left:3px solid ${c}">${esc(e.desc)}<span class="block text-[9px] opacity-60">${e.isPool ? '🟡 Pool' : esc(e.payer)} · ${esc(e.curr)} ${Number(e.amt).toLocaleString()}</span>${planOf(e) ? `<span class="block text-[9px] opacity-60">📍 ${esc(planOf(e).place)}</span>` : ''}</span>`;
-            }).join('')}</td>
-            <td class="spend-col font-bold whitespace-nowrap">${r.total ? 'HKD ' + fmt(r.total) : '<span class="opacity-20">–</span>'}</td>
           </tr>`;
     }).join('');
   }
@@ -778,8 +775,9 @@
   function setPlanType(t) {
     planType = t;
     document.getElementById('planTypeArrive').classList.toggle('active', t === 'arrive');
+    document.getElementById('planTypeDepart').classList.toggle('active', t === 'depart');
     document.getElementById('planTypeVisit').classList.toggle('active', t === 'visit');
-    document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : 'Place';
+    document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : t === 'depart' ? 'Leaving from' : 'Place';
   }
   function openPlanModal(id, presetDate, presetMemberIdx) {
     if (!(state.members || []).length) { alert('Add a member first.'); return; }
