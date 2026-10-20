@@ -408,7 +408,7 @@
             const ds = fmtYMD(d); shownDates.add(ds);
             const dayExps = exps.filter(e => e.date === ds);
             h += `<div class="mb-8" ondragover="event.preventDefault(); this.classList.add('drop-zone-active')" ondragleave="this.classList.remove('drop-zone-active')" ondrop="handleDrop(event, '${ds}')">
-                    <div class="flex justify-between items-end mb-4 px-2"><p class="serif text-2xl font-bold">Day ${count}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${ds.replace(/-/g, '/')}</p></div>
+                    <div class="flex justify-between items-end gap-3 mb-4 px-2"><div class="flex items-center flex-wrap gap-x-2 gap-y-1 min-w-0"><p class="serif text-2xl font-bold mr-1">Day ${count}</p>${dayActivityTags(ds)}</div><p class="flex-shrink-0 text-[10px] opacity-40 font-bold tracking-widest uppercase pb-1">${ds.replace(/-/g, '/')}</p></div>
                     <div class="space-y-4">${dayExps.map(e => itemHtml(e)).join('')}</div>
                     <button onclick="openModal('${ds}')" class="mt-4 text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD RECORD</button>
                   </div>`;
@@ -699,6 +699,13 @@
         });
     } else p.with = [...(p.with || []), m];
     saveAll(); renderCalendar();
+  }
+  // Small tags next to "Day N" in the Ledger: that day's calendar plans, one per activity
+  function dayActivityTags(ds) {
+    const seen = new Set();
+    return (state.plans || []).filter(p => p.date === ds).sort(sortPlans)
+        .filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; })
+        .map(p => { const c = memberColor(planPeople(p)[0]); return `<button onclick="openPlanModal('${p.id}')" class="text-[10px] font-bold px-2 py-0.5 rounded-full max-w-[160px] truncate" style="background:${c}22; color:#6d5d51; border:1px solid ${c}55">${isTravel(p) ? typeIcon(p) + ' ' : ''}${esc(p.place)}</button>`; }).join('');
   }
   // Each person's plans for a day, one entry per activity
   function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); }
