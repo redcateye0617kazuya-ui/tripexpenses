@@ -68,6 +68,7 @@
 
     <div class="px-6 py-2 space-y-4">
       <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif font-bold">
+      <div id="tripPeople" onclick="openShareModal()" class="flex items-center justify-center flex-wrap gap-2 cursor-pointer -mt-2"></div>
       <div class="flex gap-3 bg-white/40 p-3 rounded-[24px] items-end">
           <div class="flex-1 min-w-0"><p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">Start Date</p><input type="date" id="startDate" onchange="saveAll()"></div>
           <div class="flex-1 min-w-0"><p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">End Date</p><input type="date" id="endDate" onchange="saveAll()"></div>
@@ -278,7 +279,7 @@
 
   auth.onAuthStateChanged(user => {
     stopSync();
-    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); acceptInvite(); }
+    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email), name: (user.displayName || '').trim() || user.email.split('@')[0] }; startSync(); acceptInvite(); }
     else { me = null; showGate(pendingInvite() ? 'invite' : 'signin'); }
   });
 
@@ -336,6 +337,31 @@
         indexLoaded = true; onTripsChanged();
     }, err => showGate('error', err && err.message));
   }
+  // Each person's Google name is stored in the trips they're in, so others see names instead of emails
+  const profileSaved = {};
+  function saveMyProfile() {
+    trips.forEach(t => {
+        const done = me.key + '|' + t.id;
+        if (!(t.allow || {})[me.key] || profileSaved[done]) return;
+        const cur = (t.profiles || {})[me.key];
+        profileSaved[done] = true;
+        if (!cur || cur.name !== me.name || cur.email !== me.email) db.ref('ledgerTrips/' + t.id + '/profiles/' + me.key).set({ name: me.name, email: me.email }).catch(() => {});
+    });
+  }
+  function tripPeople(t) {
+    const prof = t.profiles || {};
+    return Object.entries(t.allow || {}).map(([k, email]) => ({ key: k, email, name: (prof[k] && prof[k].name) || String(email).split('@')[0], you: me && k === me.key }))
+        .sort((a, b) => (b.you - a.you) || a.name.localeCompare(b.name));
+  }
+  const PEOPLE_COLORS = ['#c0846a', '#6f8fb3', '#7a9e7e', '#b38bb0', '#d1a54a', '#5fa3a0', '#c26d7e', '#8c7a6b'];
+  function personColor(key) { let h = 0; for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PEOPLE_COLORS[h % PEOPLE_COLORS.length]; }
+  function renderTripPeople() {
+    const people = tripPeople(state);
+    document.getElementById('tripPeople').innerHTML = `<span class="text-[9px] font-bold opacity-40 uppercase tracking-widest mr-1">In this trip</span>` +
+        people.map(p => `<span class="flex items-center gap-1.5 bg-white/70 rounded-full pl-1 pr-3 py-1 text-[11px] font-bold" title="${esc(p.email)}"><span class="w-5 h-5 rounded-full text-white text-[10px] leading-5 text-center" style="background:${personColor(p.key)}">${esc(([...p.name][0] || '?').toUpperCase())}</span>${esc(p.name)}${p.you ? '<span class="opacity-40 font-semibold">(you)</span>' : ''}</span>`).join('') +
+        `<span class="text-[11px] font-bold opacity-50 px-2">+ Invite</span>`;
+  }
+
   function onTripsChanged() {
     trips = Object.values(tripData).filter(t => t && t.id != null).sort((a, b) => a.id - b.id);
     const pending = Object.keys(tripRefs).some(id => !tripLoaded[id]);
@@ -344,6 +370,7 @@
     // a trip that was just created or opened is still loading: wait for it instead of jumping to another trip
     if (currentTripId && tripRefs[currentTripId] && !tripLoaded[currentTripId]) return;
     hideGate();
+    saveMyProfile();
     if (!currentTripId || !trips.find(t => t.id == currentTripId)) {
         currentTripId = trips[0].id;
         localStorage.setItem('tripLedger_currentId', currentTripId);
@@ -374,7 +401,7 @@
     if(!state.plans) state.plans = [];
     // Firebase drops empty arrays, so an expense saved with no splitees comes back without splitWith
     state.expenses.forEach(e => { if (!e.splitWith) e.splitWith = []; });
-    renderTabs(); syncUI();
+    renderTabs(); syncUI(); renderTripPeople();
     if (!document.getElementById('shareModal').classList.contains('hidden')) renderShare();
   }
 
@@ -398,7 +425,7 @@
     if (idx !== -1) {
         trips[idx] = state; tripData[state.id] = state;
         // write everything except the sharing fields, so a stale copy never drops someone who just joined
-        const { allow, invite, joins, ...rest } = state;
+        const { allow, invite, joins, profiles, ...rest } = state;
         db.ref('ledgerTrips/' + state.id).update(rest);
     }
     renderTabs(); 
@@ -547,8 +574,9 @@
     document.getElementById('meEmail').innerText = me.email;
     document.getElementById('inviteLink').value = inviteUrl(state);
     document.getElementById('resetInviteBtn').classList.toggle('hidden', !state.invite);
-    const entries = shareEntries = Object.entries(state.allow || {}).sort((a, b) => (a[0] === me.key ? -1 : b[0] === me.key ? 1 : a[1].localeCompare(b[1])));
-    document.getElementById('shareList').innerHTML = entries.map(([k, email], i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="font-bold truncate">${esc(email)}${k === me.key ? ' <span class="opacity-40">(you)</span>' : ''}</span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3">${k === me.key ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
+    const people = tripPeople(state);
+    const entries = shareEntries = people.map(p => [p.key, p.email]);
+    document.getElementById('shareList').innerHTML = people.map((p, i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="min-w-0"><span class="font-bold block truncate">${esc(p.name)}${p.you ? ' <span class="opacity-40">(you)</span>' : ''}</span><span class="block text-[10px] opacity-50 truncate">${esc(p.email)}</span></span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3 flex-shrink-0">${p.you ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
   }
   async function ensureInvite() {
     if (!state.invite) {
@@ -591,6 +619,7 @@
     if (!confirm(self ? `Leave "${state.name}"? You won't see it any more.` : `Remove ${allow[k]} from "${state.name}"?`)) return;
     const id = state.id;
     await db.ref('ledgerUserTrips/' + k + '/' + id).remove();
+    await db.ref('ledgerTrips/' + id + '/profiles/' + k).remove().catch(() => {});
     await db.ref('ledgerTrips/' + id + '/allow/' + k).remove();
     if (self) closeShareModal(); else renderShare();
   }
