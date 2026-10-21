@@ -483,8 +483,7 @@
     document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
     document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => {
         const key = linkedKeyOf(state, m);
-        const badge = key ? `<span class="w-5 h-5 -ml-2 rounded-full text-white text-[10px] leading-5 text-center" style="background:${memberColor(m)}">${esc(([...m][0] || '?').toUpperCase())}</span>` : '';
-        return `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2" title="${key ? esc(state.allow[key]) : 'No account'}">${badge}${esc(m)}${me && key === me.key ? '<span class="opacity-40 font-semibold">(you)</span>' : ''}<button onclick="removeMember(${i})" class="text-red-300">×</button></div>`;
+        return `<div class="px-2 py-1 text-[12px] font-bold flex items-center gap-1" title="${key ? esc(state.allow[key]) : 'No account'}">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300 px-1">×</button></div>`;
     }).join('') + `<button onclick="openShareModal()" class="text-[11px] font-bold opacity-50 px-2">+ Invite</button>`;
     renderTimeline(); calculateFinancials(); renderCalendar(); applyView();
   }
