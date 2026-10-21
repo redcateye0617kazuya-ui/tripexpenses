@@ -68,6 +68,7 @@
 
     <div class="px-6 py-2 space-y-4">
       <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif font-bold">
+      <div id="claimBanner" class="hidden"></div>
       <div class="flex gap-3 bg-white/40 p-3 rounded-[24px] items-end">
           <div class="flex-1 min-w-0"><p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">Start Date</p><input type="date" id="startDate" onchange="saveAll()"></div>
           <div class="flex-1 min-w-0"><p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">End Date</p><input type="date" id="endDate" onchange="saveAll()"></div>
@@ -84,9 +85,9 @@
     </div>
 
     <div class="flex-1 p-6 space-y-8">
-        <div class="flex justify-between items-center bg-white/30 p-2 rounded-full">
-            <div id="memberList" class="flex flex-wrap gap-2 px-2"></div>
-            <button onclick="addMember()" class="w-10 h-10 bg-white rounded-full text-lg shadow-sm">+</button>
+        <div class="flex justify-between items-center bg-white/30 p-2 rounded-[28px]">
+            <div id="memberList" class="flex flex-wrap items-center gap-2 px-2"></div>
+            <button onclick="addMember()" title="Add someone who won't sign in" class="w-10 h-10 flex-shrink-0 bg-white rounded-full text-lg shadow-sm">+</button>
         </div>
         <div id="ledgerView" class="space-y-8">
         <section class="pool-box p-6 shadow-inner">
@@ -217,9 +218,8 @@
             <button onclick="copyInviteLink()" id="copyInviteBtn" class="btn-primary !py-3">COPY INVITE LINK</button>
             <button onclick="resetInviteLink()" id="resetInviteBtn" class="w-full text-[10px] font-bold opacity-50">RESET LINK (the old link stops working)</button>
         </div>
+        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mb-2">People in this trip</p>
         <div id="shareList" class="space-y-2"></div>
-        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mt-4">Or add by email</p>
-        <div class="flex gap-2 mt-2"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 min-w-0 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
         <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
             <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
             <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
@@ -278,7 +278,7 @@
 
   auth.onAuthStateChanged(user => {
     stopSync();
-    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email) }; startSync(); acceptInvite(); }
+    if (user && user.email) { me = { email: user.email.toLowerCase(), key: emailKey(user.email), name: (user.displayName || '').trim() || user.email.split('@')[0] }; startSync(); acceptInvite(); }
     else { me = null; showGate(pendingInvite() ? 'invite' : 'signin'); }
   });
 
@@ -336,6 +336,69 @@
         indexLoaded = true; onTripsChanged();
     }, err => showGate('error', err && err.message));
   }
+  // People who join a trip become its members automatically. profiles/<emailKey> = { name, email, member }
+  // links each account to its member name, so removing a member also removes their access.
+  // Add/remove member names atomically, so two people joining at once can't overwrite each other
+  function changeMembers(fn, tripId) {
+    const id = tripId || state.id;
+    return db.ref('ledgerTrips/' + id + '/members').transaction(cur => fn(Array.isArray(cur) ? cur.slice() : Object.values(cur || {})));
+  }
+  function shortName(n) { return String(n || '').trim().split(/\s+/)[0] || 'Me'; }
+  function linkedKeyOf(t, member) { const e = Object.entries(t.profiles || {}).find(([k, p]) => p && p.member === member && (t.allow || {})[k]); return e ? e[0] : null; }
+  function myMemberStatus(t) {
+    const prof = (t.profiles || {})[me.key], members = t.members || [];
+    if (prof && prof.member && members.includes(prof.member)) return { linked: prof.member };
+    const unlinked = members.filter(m => !linkedKeyOf(t, m));
+    const names = [me.name, shortName(me.name), me.email.split('@')[0]].map(x => x.toLowerCase());
+    const match = unlinked.find(m => names.includes(m.toLowerCase()));
+    if (match) return { auto: match };
+    if (!unlinked.length) return { add: true };
+    return { ask: unlinked };
+  }
+  const syncBusy = {};
+  function syncMe() {
+    trips.forEach(t => {
+        if (!(t.allow || {})[me.key] || syncBusy[t.id]) return;
+        const st = myMemberStatus(t), cur = (t.profiles || {})[me.key] || {};
+        const want = { name: me.name, email: me.email, ...(st.linked || st.auto ? { member: st.linked || st.auto } : {}) };
+        if (st.add) { syncBusy[t.id] = true; addMeAsMember(t).finally(() => { delete syncBusy[t.id]; }); return; }
+        if (cur.name !== want.name || cur.email !== want.email || cur.member !== want.member) {
+            syncBusy[t.id] = true;
+            db.ref('ledgerTrips/' + t.id + '/profiles/' + me.key).set(want).catch(() => {}).finally(() => { delete syncBusy[t.id]; });
+        }
+    });
+  }
+  async function addMeAsMember(t) {
+    let name = shortName(me.name);
+    await changeMembers(arr => {
+        name = shortName(me.name);
+        if (arr.includes(name) && linkedKeyOf(t, name)) name = `${name} (${me.email.split('@')[0]})`;
+        if (!arr.includes(name)) arr.push(name);
+        return arr;
+    }, t.id);
+    await db.ref('ledgerTrips/' + t.id + '/profiles/' + me.key).set({ name: me.name, email: me.email, member: name });
+  }
+  function claimMember(i) {
+    const st = myMemberStatus(state);
+    if (!st.ask || st.ask[i] === undefined) return;
+    db.ref('ledgerTrips/' + state.id + '/profiles/' + me.key).set({ name: me.name, email: me.email, member: st.ask[i] });
+  }
+  function claimNew() { addMeAsMember(state); }
+  function renderClaimBanner() {
+    const st = me && state.allow && state.allow[me.key] ? myMemberStatus(state) : {};
+    const el = document.getElementById('claimBanner');
+    el.classList.toggle('hidden', !st.ask);
+    if (!st.ask) return;
+    el.innerHTML = `<div class="app-card p-4 space-y-3 text-center"><p class="text-xs font-bold">Which name is you?</p><p class="text-[11px] opacity-50">Pick your name so your expenses and plans are yours.</p>
+        <div class="flex flex-wrap justify-center gap-2">${st.ask.map((m, i) => `<button onclick="claimMember(${i})" class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm">${esc(m)}</button>`).join('')}
+        <button onclick="claimNew()" class="px-4 py-2 rounded-full text-[11px] font-bold opacity-60">I'm not listed — add me as ${esc(shortName(me.name))}</button></div></div>`;
+  }
+  function tripPeople(t) {
+    const prof = t.profiles || {};
+    return Object.entries(t.allow || {}).map(([k, email]) => ({ key: k, email, name: (prof[k] && prof[k].name) || String(email).split('@')[0], member: prof[k] && prof[k].member, you: me && k === me.key }))
+        .sort((a, b) => (b.you - a.you) || a.name.localeCompare(b.name));
+  }
+
   function onTripsChanged() {
     trips = Object.values(tripData).filter(t => t && t.id != null).sort((a, b) => a.id - b.id);
     const pending = Object.keys(tripRefs).some(id => !tripLoaded[id]);
@@ -344,6 +407,7 @@
     // a trip that was just created or opened is still loading: wait for it instead of jumping to another trip
     if (currentTripId && tripRefs[currentTripId] && !tripLoaded[currentTripId]) return;
     hideGate();
+    syncMe();
     if (!currentTripId || !trips.find(t => t.id == currentTripId)) {
         currentTripId = trips[0].id;
         localStorage.setItem('tripLedger_currentId', currentTripId);
@@ -360,7 +424,7 @@
         : '';
     if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
     else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
-    else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
+    else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend for their trip's invite link.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
     else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
     else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
   }
@@ -374,7 +438,7 @@
     if(!state.plans) state.plans = [];
     // Firebase drops empty arrays, so an expense saved with no splitees comes back without splitWith
     state.expenses.forEach(e => { if (!e.splitWith) e.splitWith = []; });
-    renderTabs(); syncUI();
+    renderTabs(); syncUI(); renderClaimBanner();
     if (!document.getElementById('shareModal').classList.contains('hidden')) renderShare();
   }
 
@@ -397,8 +461,8 @@
     const idx = trips.findIndex(t => t.id == currentTripId);
     if (idx !== -1) {
         trips[idx] = state; tripData[state.id] = state;
-        // write everything except the sharing fields, so a stale copy never drops someone who just joined
-        const { allow, invite, joins, ...rest } = state;
+        // write everything except sharing fields and members (people join at any time; members change via changeMembers)
+        const { allow, invite, joins, profiles, members, ...rest } = state;
         db.ref('ledgerTrips/' + state.id).update(rest);
     }
     renderTabs(); 
@@ -416,7 +480,10 @@
     document.getElementById('currentRateVal').value = state.rateVal || 1;
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
     document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
-    document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => `<div class="bg-white px-4 py-2 rounded-full text-[11px] font-bold shadow-sm flex items-center gap-2">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300">×</button></div>`).join('');
+    document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => {
+        const key = linkedKeyOf(state, m);
+        return `<div class="px-2 py-1 text-[12px] font-bold flex items-center gap-1" title="${key ? esc(state.allow[key]) : 'No account'}">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300 px-1">×</button></div>`;
+    }).join('') + `<button onclick="openShareModal()" class="text-[11px] font-bold opacity-50 px-2">+ Invite</button>`;
     renderTimeline(); calculateFinancials(); renderCalendar(); applyView();
   }
 
@@ -516,7 +583,7 @@
     document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center"><span>+ ${d.curr} ${d.amt}</span><div class="flex items-center gap-2"><button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div></div>`).join('');
   }
 
-  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; saveAll(); } }
+  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; saveAll(); changeMembers(() => []); } }
   function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; document.getElementById('usePool').checked = false; togglePoolPayer(false); fillExpensePlanOptions(isD ? null : (date || 'PRE'), null); }
   function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = (e.splitWith || []).includes(i.value)); } fillExpensePlanOptions(e.date, e.planId); }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
@@ -547,8 +614,9 @@
     document.getElementById('meEmail').innerText = me.email;
     document.getElementById('inviteLink').value = inviteUrl(state);
     document.getElementById('resetInviteBtn').classList.toggle('hidden', !state.invite);
-    const entries = shareEntries = Object.entries(state.allow || {}).sort((a, b) => (a[0] === me.key ? -1 : b[0] === me.key ? 1 : a[1].localeCompare(b[1])));
-    document.getElementById('shareList').innerHTML = entries.map(([k, email], i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="font-bold truncate">${esc(email)}${k === me.key ? ' <span class="opacity-40">(you)</span>' : ''}</span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3">${k === me.key ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
+    const people = tripPeople(state);
+    const entries = shareEntries = people.map(p => [p.key, p.email]);
+    document.getElementById('shareList').innerHTML = people.map((p, i) => `<div class="flex justify-between items-center bg-white rounded-2xl px-4 py-3 text-xs"><span class="min-w-0"><span class="font-bold block truncate">${esc(p.name)}${p.you ? ' <span class="opacity-40">(you)</span>' : ''}</span><span class="block text-[10px] opacity-50 truncate">${esc(p.email)}${p.member && p.member !== p.name ? ' · shown as ' + esc(p.member) : ''}</span></span><button onclick="removeShare(${i})" class="text-red-400 font-bold text-[10px] pl-3 flex-shrink-0">${p.you ? 'LEAVE' : 'REMOVE'}</button></div>`).join('');
   }
   async function ensureInvite() {
     if (!state.invite) {
@@ -573,26 +641,33 @@
     await db.ref('ledgerTrips/' + state.id + '/invite').set(newToken());
     renderShare();
   }
-  async function addShare() {
-    const email = document.getElementById('shareEmail').value.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Enter an email address.'); return; }
-    const k = emailKey(email);
-    if ((state.allow || {})[k]) { alert('Already added.'); return; }
-    await db.ref('ledgerTrips/' + state.id + '/allow/' + k).set(email);
-    await db.ref('ledgerUserTrips/' + k + '/' + state.id).set(true);
-    document.getElementById('shareEmail').value = ''; renderShare();
-  }
+
   let shareEntries = [];
-  async function removeShare(i) {
-    const k = (shareEntries[i] || [])[0];
-    if (!k) return;
+  function removeShare(i) { const k = (shareEntries[i] || [])[0]; if (k) removePerson(k); }
+  // Remove someone from the trip: their member name and their access go together
+  async function removePerson(k) {
     const self = k === me.key, allow = state.allow || {};
     if (self && Object.keys(allow).length <= 1) { alert("You're the only one in this trip. Use DELETE TRIP instead."); return; }
-    if (!confirm(self ? `Leave "${state.name}"? You won't see it any more.` : `Remove ${allow[k]} from "${state.name}"?`)) return;
+    const member = ((state.profiles || {})[k] || {}).member;
+    const who = member || allow[k];
+    if (!confirm(self ? `Leave "${state.name}"? You won't see it any more.` : `Remove ${who} from "${state.name}"? They won't see this trip any more.`)) return;
     const id = state.id;
-    await db.ref('ledgerUserTrips/' + k + '/' + id).remove();
-    await db.ref('ledgerTrips/' + id + '/allow/' + k).remove();
-    if (self) closeShareModal(); else renderShare();
+    const dropAccess = async () => {
+        await db.ref('ledgerUserTrips/' + k + '/' + id).remove();
+        await db.ref('ledgerTrips/' + id + '/profiles/' + k).remove().catch(() => {});
+        await db.ref('ledgerTrips/' + id + '/allow/' + k).remove();
+    };
+    if (self) {
+        // we need access to edit the member list, so drop our name first, without syncMe adding it back meanwhile
+        syncBusy[id] = true;
+        try { if (member) await changeMembers(arr => arr.filter(m => m !== member), id); await dropAccess(); }
+        finally { delete syncBusy[id]; }
+    } else {
+        // take their access away first, so their own screen can't add their name back
+        await dropAccess();
+        if (member) await changeMembers(arr => arr.filter(m => m !== member), id);
+    }
+    if (self) closeShareModal(); else if (!document.getElementById('shareModal').classList.contains('hidden')) renderShare();
   }
   // One person imports the trips from the old shared list, then shares each trip with friends
   async function importLegacyTrips() {
@@ -616,8 +691,14 @@
   }
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; if (!(await fetchLiveRate())) saveAll(); }
   async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); return true; } } catch (e) {} return false; }
-  function addMember() { const n = (prompt("Name?") || '').trim(); if(n) { if (state.members.includes(n)) { alert(`${n} already exists.`); return; } state.members.push(n); saveAll(); } }
-  function removeMember(i) { const n = state.members[i]; if(n !== undefined && confirm(`Remove ${n}?`)) { state.members = state.members.filter(m => m !== n); saveAll(); } }
+  function addMember() { const n = (prompt("Name of someone who won't sign in?") || '').trim(); if(n) { if (state.members.includes(n)) { alert(`${n} already exists.`); return; } changeMembers(arr => arr.includes(n) ? arr : [...arr, n]); } }
+  function removeMember(i) {
+    const n = state.members[i];
+    if (n === undefined) return;
+    const key = linkedKeyOf(state, n);
+    if (key) return removePerson(key);
+    if (confirm(`Remove ${n}?`)) changeMembers(arr => arr.filter(m => m !== n));
+  }
   function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); }
   function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); }
   function toggleSettled(id) { const e = state.expenses.find(x => x.id == id); if(e) e.settled = !e.settled; saveAll(); }
