@@ -218,9 +218,8 @@
             <button onclick="copyInviteLink()" id="copyInviteBtn" class="btn-primary !py-3">COPY INVITE LINK</button>
             <button onclick="resetInviteLink()" id="resetInviteBtn" class="w-full text-[10px] font-bold opacity-50">RESET LINK (the old link stops working)</button>
         </div>
+        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mb-2">People in this trip</p>
         <div id="shareList" class="space-y-2"></div>
-        <p class="text-[10px] font-bold opacity-40 uppercase ml-2 mt-4">Or add by email</p>
-        <div class="flex gap-2 mt-2"><input id="shareEmail" type="email" placeholder="friend@gmail.com" class="flex-1 min-w-0 !text-left" style="background:#fff;border-radius:20px;padding:14px 18px;font-size:16px;outline:none"><button onclick="addShare()" class="px-5 rounded-[20px] bg-[#6d5d51] text-white text-xs font-bold">ADD</button></div>
         <div class="mt-8 pt-6 border-t border-black/5 space-y-3 text-center">
             <p class="text-[11px] opacity-50">Signed in as <b id="meEmail"></b></p>
             <button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white/70">IMPORT TRIPS FROM THE OLD VERSION</button>
@@ -425,7 +424,7 @@
         : '';
     if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
     else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
-    else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
+    else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend for their trip's invite link.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
     else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
     else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
   }
@@ -642,15 +641,7 @@
     await db.ref('ledgerTrips/' + state.id + '/invite').set(newToken());
     renderShare();
   }
-  async function addShare() {
-    const email = document.getElementById('shareEmail').value.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Enter an email address.'); return; }
-    const k = emailKey(email);
-    if ((state.allow || {})[k]) { alert('Already added.'); return; }
-    await db.ref('ledgerTrips/' + state.id + '/allow/' + k).set(email);
-    await db.ref('ledgerUserTrips/' + k + '/' + state.id).set(true);
-    document.getElementById('shareEmail').value = ''; renderShare();
-  }
+
   let shareEntries = [];
   function removeShare(i) { const k = (shareEntries[i] || [])[0]; if (k) removePerson(k); }
   // Remove someone from the trip: their member name and their access go together
