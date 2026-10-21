@@ -230,7 +230,7 @@
     </div>
   </div>
 
-  <div id="gate" class="fixed inset-0 z-40 bg-[#f1ede4] flex items-center justify-center p-6"><div id="gateBox" class="app-card p-8 w-full max-w-sm text-center space-y-5"><p class="opacity-40 text-sm">Loading…</p></div></div>
+  <div id="gate" class="fixed inset-0 z-[100] bg-[#f1ede4] flex items-center justify-center p-6"><div id="gateBox" class="app-card p-8 w-full max-w-sm text-center space-y-5"><p class="opacity-40 text-sm">Loading…</p></div></div>
 
 <script>
   const firebaseConfig = { apiKey: "AIzaSyB_ni1Eypuaq1axtilczSo8gjdZk7_Rge4", authDomain: "trip-planner-813fe.firebaseapp.com", databaseURL: "https://trip-planner-813fe-default-rtdb.firebaseio.com", projectId: "trip-planner-813fe", storageBucket: "trip-planner-813fe.firebasestorage.app", messagingSenderId: "606499488470", appId: "1:606499488470:web:e744bc3964fa4a54ae7f77", measurementId: "G-CTQHRMRTK2" };
@@ -282,12 +282,33 @@
     else { me = null; showGate(pendingInvite() ? 'invite' : 'signin'); }
   });
 
+  // Sign-in uses a popup only. Redirect sign-in breaks on iPhone Safari and in-app browsers because the site
+  // (github.io) and Firebase's sign-in page (firebaseapp.com) are different domains.
+  // Google also refuses to sign in inside in-app browsers (WhatsApp, Instagram, LINE, Facebook…).
+  function inAppBrowser() {
+    const ua = navigator.userAgent || '';
+    return /FBAN|FBAV|FB_IAB|Instagram|Line\/|WhatsApp|MicroMessenger|Messenger|KAKAOTALK|Snapchat|TikTok|musical_ly|Twitter|LinkedInApp|GSA\//i.test(ua) || /; wv\)/.test(ua);
+  }
+  function shareableUrl() {
+    const inv = pendingInvite();
+    return location.origin + location.pathname + (inv ? `#join=${inv[0]}.${inv[1]}` : '');
+  }
+  async function copyPageLink(btn) {
+    const url = shareableUrl();
+    try { await navigator.clipboard.writeText(url); btn.innerText = 'COPIED ✓ — NOW PASTE IT IN SAFARI / CHROME'; }
+    catch (e) { prompt('Copy this link and open it in Safari or Chrome:', url); }
+  }
+  let signingIn = false;
   function signIn() {
+    if (signingIn) return;
+    signingIn = true;
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     auth.signInWithPopup(provider).catch(e => {
-      if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) auth.signInWithRedirect(provider);
-      else if (e.code !== 'auth/popup-closed-by-user') alert(e.message);
-    });
+      if (e.code === 'auth/popup-blocked') alert('The sign-in window was blocked. Allow pop-ups for this site, or open this page in Safari / Chrome, then tap Sign in again.');
+      else if (e.code === 'auth/operation-not-supported-in-this-environment' || e.code === 'auth/web-storage-unsupported') alert('Sign-in does not work in this browser. Open this page in Safari or Chrome.');
+      else if (!['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(e.code)) alert(e.message);
+    }).finally(() => { signingIn = false; });
   }
   function signOut() { closeShareModal(); auth.signOut(); }
 
@@ -334,8 +355,11 @@
     document.getElementById('gate').classList.remove('hidden');
     const box = document.getElementById('gateBox');
     const title = '<p class="serif text-3xl font-bold">📜 Trip Ledger</p>';
-    if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
-    else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p><button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    const inApp = (mode === 'signin' || mode === 'invite') && inAppBrowser()
+        ? `<div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left space-y-2"><p class="text-xs font-bold">Open this page in Safari or Chrome</p><p class="text-[11px] opacity-70">Google sign-in doesn't work inside apps like WhatsApp, Instagram or LINE. Tap ⋯ / the share icon and choose <b>Open in Safari</b> (or Chrome), or copy the link and paste it there.</p><button onclick="copyPageLink(this)" class="w-full text-[11px] font-bold py-3 rounded-[16px] bg-white">COPY LINK</button></div>`
+        : '';
+    if (mode === 'invite') box.innerHTML = `${title}<p class="text-xs opacity-60">You've been invited to a trip.<br>Sign in with Google to join.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
+    else if (mode === 'signin') box.innerHTML = `${title}<p class="text-xs opacity-60">Sign in to see the trips you've been added to.</p>${inApp}<button onclick="signIn()" class="btn-primary">Sign in with Google</button>`;
     else if (mode === 'empty') box.innerHTML = `${title}<p class="text-xs opacity-60">No trips yet for <b>${esc(me.email)}</b>.<br>Start one, or ask a friend to add this email to their trip.</p><button onclick="addNewTrip()" class="btn-primary">+ NEW TRIP</button><button onclick="importLegacyTrips()" class="w-full text-[11px] font-bold opacity-60 py-3 rounded-[20px] bg-white">IMPORT TRIPS FROM THE OLD VERSION</button><button onclick="signOut()" class="w-full text-[10px] font-bold opacity-40">SIGN OUT</button>`;
     else if (mode === 'error') box.innerHTML = `${title}<p class="text-xs text-red-700">${esc(msg || 'Something went wrong.')}</p><button onclick="signOut()" class="btn-primary">SIGN OUT</button>`;
     else box.innerHTML = '<p class="opacity-40 text-sm">Loading…</p>';
