@@ -734,33 +734,20 @@
 
   // ---------- Trip summary (shown under the master calendar) ----------
   function toHKD(amt, curr) { return curr === 'HKD' ? amt : amt / (state.rateVal || 1); }
+  // Same Settlement card as at the bottom of the Ledger (its table and transfers are reused as-is)
   function renderTripSummary() {
-    const members = state.members || [];
-    const exps = state.expenses || [];
-    const fmt = n => Math.round(n).toLocaleString();
-
-    // Each person's share of all spending (pool spending is split like any other record)
-    const share = {}; members.forEach(m => share[m] = 0);
-    let totalHKD = 0;
-    exps.forEach(e => {
-        const hk = toHKD(e.amt, e.curr); totalHKD += hk;
-        const sw = (e.splitWith || []).filter(m => share[m] !== undefined);
-        const who = sw.length ? sw : members;
-        who.forEach(m => share[m] += hk / who.length);
-    });
-
-    const summary = `<div class="app-card p-6 space-y-5">
-        <div class="flex justify-between items-start">
-            <div><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest mb-1">Total spent</p><p class="text-3xl font-bold tracking-tighter">HKD ${fmt(totalHKD)}</p><p class="text-[10px] opacity-50 font-bold">≈ ${esc(state.targetCurr)} ${fmt(totalHKD * (state.rateVal || 1))}</p></div>
-            <div class="text-right"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest mb-1">Pool left</p><p class="text-xl font-bold">${esc(state.targetCurr)} ${document.getElementById('commonPoolInfo').innerText}</p></div>
+    const cur = esc(state.targetCurr || '');
+    document.getElementById('calSummary').innerHTML = `<div class="app-card p-6 space-y-6">
+        <h3 class="serif text-2xl text-center font-bold">Settlement</h3>
+        <div class="overflow-x-auto rounded-2xl border border-gray-100 bg-white/50">
+            <table class="w-full text-left text-[11px] min-w-[320px]">
+                <thead class="bg-gray-50/50 font-bold opacity-50"><tr><th class="p-3">NAME</th><th class="p-3 text-right">HKD</th><th class="p-3 text-right whitespace-nowrap">HKD ±</th><th class="p-3 text-right">${cur}</th><th class="p-3 text-right whitespace-nowrap">${cur} ±</th></tr></thead>
+                <tbody class="divide-y divide-gray-100">${document.getElementById('calculationTable').innerHTML}</tbody>
+            </table>
         </div>
-        ${members.length ? `<div class="space-y-2"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Each person's share</p>
-            ${members.map(m => `<div class="flex justify-between items-center text-xs"><span class="flex items-center gap-2 font-bold"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span>${esc(m)}</span><span class="font-bold">HKD ${fmt(share[m])}</span></div>`).join('')}
-        </div>` : ''}
-        <div class="space-y-2"><p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">Settle up</p>${document.getElementById('transferList').innerHTML}</div>
+        <div class="space-y-3">${document.getElementById('transferList').innerHTML}</div>
+        <button onclick="copySummary()" class="btn-primary shadow-lg uppercase tracking-widest">Copy Report</button>
       </div>`;
-
-    document.getElementById('calSummary').innerHTML = summary;
   }
 
   // ---------- Calendar ----------
