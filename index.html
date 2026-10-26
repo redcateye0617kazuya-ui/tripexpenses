@@ -825,10 +825,10 @@
     } else p.with = [...(p.with || []), m];
     saveAll(); renderCalendar();
   }
-  // Small tags next to "Day N" in the Ledger: that day's calendar plans, one per activity (flights show who's flying)
+  // Small tags next to "Day N" in the Ledger: that day's calendar plans, one per activity (flights show who's flying; hotels aren't shown)
   function dayActivityTags(ds) {
     const seen = new Set();
-    return (state.plans || []).filter(p => p.date === ds).sort(sortPlans)
+    return (state.plans || []).filter(p => p.date === ds && p.type !== 'hotel').sort(sortPlans)
         .filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; })
         .map(p => { const c = memberColor(planPeople(p)[0]); return `<button onclick="openPlanModal('${p.id}')" class="text-[10px] font-bold px-2 py-0.5 rounded-full max-w-[160px] truncate" title="${esc(p.place)}" style="background:${c}22; color:#6d5d51; border:1px solid ${c}55">${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${isTravel(p) ? planPeople(p).map(esc).join(', ') : esc(p.place)}</button>`; }).join('');
   }
