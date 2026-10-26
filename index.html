@@ -46,7 +46,7 @@
     .mg-row.out-trip { opacity: 0.55; }
     .mg-date { position: sticky; left: 0; z-index: 6; background: white; width: 60px; min-width: 60px; padding: 6px; font-weight: 700; border-right: 1px solid #efe9e1; }
     .mg-row.is-today .mg-date { box-shadow: inset 3px 0 0 var(--main-brown); }
-    .mg-cells { position: relative; flex: 1; display: grid; grid-auto-flow: row dense; align-content: start; min-height: 48px; padding: 3px 0; }
+    .mg-cells { position: relative; flex: 1; display: grid; grid-auto-flow: row; align-content: start; min-height: 48px; padding: 3px 0; }
     .mg-head .mg-cells { min-height: 0; padding: 6px 0; }
     .mg-head .mg-cells > div { padding: 0 8px 0 14px; font-weight: 700; white-space: nowrap; }
     .mg-zone { position: absolute; top: 0; bottom: 0; border-right: 1px solid #efe9e1; cursor: pointer; z-index: 0; }
@@ -57,6 +57,10 @@
     .join-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
     .join-dot { width: 20px; height: 20px; border-radius: 50%; font-size: 9px; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--c); color: var(--c); background: white; }
     .join-dot.on { background: var(--c); color: white; }
+    .mg-cells .plan-chip[data-drag] { cursor: grab; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    .mg-row.drop-target .mg-cells { background: rgba(109, 93, 81, 0.10); }
+    .plan-chip.drag-src { opacity: 0.35; }
+    .drag-ghost { position: fixed; z-index: 200; pointer-events: none; opacity: 0.9; transform: rotate(-2deg); box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
     .mg-cells .plan-chip { position: relative; z-index: 4; margin: 3px 5px 3px 15px; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate, #planRetDate, #planOutDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
@@ -771,7 +775,10 @@
   function isTravel(p) { return p.type === 'arrive' || p.type === 'depart'; }
   function typeIcon(p) { return p.type === 'arrive' ? '🛬' : p.type === 'depart' ? '🛫' : p.type === 'hotel' ? '🏨' : '📍'; }
   const TYPE_ORDER = { arrive: 0, hotel: 1, visit: 2, depart: 3 };
-  function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
+  // Within a day, things are ordered by time; without a time they sit where they usually happen
+  const DEFAULT_TIME = { arrive: '00:00', visit: '12:00', hotel: '15:00', checkout: '11:00', depart: '23:58', expense: '23:59' };
+  function timeKey(p) { return p.time || DEFAULT_TIME[p.type] || '12:00'; }
+  function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || timeKey(a).localeCompare(timeKey(b)) || (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
   function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
   function fmtShort(ds) { const d = parseYMD(ds); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ds; }
 
@@ -964,9 +971,9 @@
     }).filter(Boolean);
     const hotelSpans = uniq(hotels).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(r => ({ ...r, from: h.date, to: h.endDate || h.date, c: memberColor(people[r.s]) })));
 
-    const chip = (r, label, sub, onclick, extra = '') => {
+    const chip = (r, label, sub, onclick, extra = '', drag = '') => {
         const c = r.w > 1 ? '#6d5d51' : memberColor(people[r.s]);
-        return `<span onclick="event.stopPropagation(); ${onclick}" class="plan-chip" style="grid-column:${r.s + 1} / span ${r.w}; background:${r.w > 1 ? '#efe7dc' : c + '22'}; border-left:3px solid ${c}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
+        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip" style="grid-column:${r.s + 1} / span ${r.w}; background:${r.w > 1 ? '#efe7dc' : c + '22'}; border-left:3px solid ${c}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
     };
     const head = `<div class="mg-row mg-head"><div class="mg-date"><span class="text-[9px] opacity-50 uppercase">Date</span></div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${people.map(m => `<div><span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style="background:${memberColor(m)}"></span>${esc(m)}</div>`).join('')}</div></div>`;
     const body = rows.map(r => {
@@ -988,21 +995,108 @@
                 if (ds === st.from || ds === st.to) layers += `<span class="mg-plane" style="--c:${st.c}; left:${x}; top:18px">✈</span>`;
             });
         }
-        // items: plans on this day (+ hotel check-outs), spanning their people's columns; then personal expenses
-        const dayPlans = uniq(plans.filter(p => p.date === ds)).sort(sortPlans);
-        let items = dayPlans.flatMap(p => runs(planPeople(p).map(col).filter(i => i >= 0)).map(rn => {
+        // items: plans on this day, hotel check-outs and personal expenses, in time order; plans span their people's columns
+        const items = [];
+        uniq(plans.filter(p => p.date === ds)).forEach(p => runs(planPeople(p).map(col).filter(i => i >= 0)).forEach(rn => {
             const sub = p.type === 'hotel' ? `Check-in${p.time ? ' ' + esc(p.time) : ''}` : (p.time ? esc(p.time) : '');
-            return chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, sub, `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p));
-        })).join('');
-        items += uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(rn =>
-            chip(rn, `🏨 Check-out`, `${esc(h.place)}${h.endTime ? ' · ' + esc(h.endTime) : ''}`, `openPlanModal('${h.id}')`))).join('');
-        items += paid.filter(e => e.date === ds).map(e => { const i = col(e.payer), c = memberColor(e.payer);
-            return `<span onclick="event.stopPropagation(); editExpense('${e.id}')" class="plan-chip ${e.settled ? 'settled' : ''}" style="grid-column:${i + 1}; background:#f1ede4; border-left:3px dashed ${c}">💰 ${esc(e.desc)}<span class="block text-[9px] opacity-60">${esc(e.curr)} ${Number(e.amt).toLocaleString()}${planOf(e) ? ' · 📍 ' + esc(planOf(e).place) : ''}</span></span>`; }).join('');
-        return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${items}</div></div>`;
+            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html: chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, sub, `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id) });
+        }));
+        uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => runs(planPeople(h).map(col).filter(i => i >= 0)).forEach(rn =>
+            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `🏨 Check-out`, `${esc(h.place)}${h.endTime ? ' · ' + esc(h.endTime) : ''}`, `openPlanModal('${h.id}')`, '', 'checkout:' + h.id) })));
+        paid.filter(e => e.date === ds).forEach(e => { const i = col(e.payer), c = memberColor(e.payer);
+            items.push({ t: DEFAULT_TIME.expense, o: 9, html: `<span onclick="event.stopPropagation(); if (!dragJustEnded()) editExpense('${e.id}')" data-drag="exp:${e.id}" class="plan-chip ${e.settled ? 'settled' : ''}" style="grid-column:${i + 1}; background:#f1ede4; border-left:3px dashed ${c}">💰 ${esc(e.desc)}<span class="block text-[9px] opacity-60">${esc(e.curr)} ${Number(e.amt).toLocaleString()}${planOf(e) ? ' · 📍 ' + esc(planOf(e).place) : ''}</span></span>` }); });
+        const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
+        return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
     grid.style.minWidth = `calc(60px + ${N} * 112px)`;
     grid.innerHTML = head + body;
   }
+  // ---------- Drag a box in the master calendar to another day ----------
+  // Mouse: just drag. Touch: press and hold briefly, then drag (so normal scrolling still works).
+  let drag = null, dragEndedAt = 0;
+  function dragJustEnded() { return Date.now() - dragEndedAt < 400; }
+  function addDays(ds, n) { const d = parseYMD(ds); d.setDate(d.getDate() + n); return fmtYMD(d); }
+  function dayDiff(a, b) { return Math.round((parseYMD(b) - parseYMD(a)) / 86400000); }
+  document.addEventListener('pointerdown', e => {
+    const el = e.target.closest('#masterGrid .plan-chip[data-drag]');
+    if (!el || e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    drag = { el, key: el.dataset.drag, from: el.closest('.mg-row').dataset.date, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, active: false, touch: e.pointerType !== 'mouse' };
+    if (drag.touch) drag.timer = setTimeout(() => startDrag(), 350);
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    const moved = Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0);
+    if (!drag.active) {
+        if (drag.touch && moved > 8) { clearTimeout(drag.timer); drag = null; return; } // it's a scroll
+        if (!drag.touch && moved > 5) startDrag(); else return;
+    }
+    moveGhost();
+  });
+  // while dragging on touch, stop the page from scrolling
+  document.addEventListener('touchmove', e => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
+  document.addEventListener('pointerup', () => endDrag(true));
+  document.addEventListener('pointercancel', () => endDrag(false));
+  function startDrag() {
+    if (!drag) return;
+    drag.active = true;
+    const r = drag.el.getBoundingClientRect();
+    drag.dx = drag.x0 - r.left; drag.dy = drag.y0 - r.top;
+    drag.ghost = drag.el.cloneNode(true);
+    drag.ghost.classList.add('drag-ghost'); drag.ghost.style.width = r.width + 'px'; drag.ghost.style.margin = '0';
+    document.body.appendChild(drag.ghost);
+    drag.el.classList.add('drag-src');
+    if (navigator.vibrate) navigator.vibrate(15);
+    drag.scroll = setInterval(() => { if (!drag) return; if (drag.y < 70) window.scrollBy(0, -12); else if (drag.y > innerHeight - 70) window.scrollBy(0, 12); moveGhost(); }, 30);
+    moveGhost();
+  }
+  function rowUnder(x, y) { const el = document.elementFromPoint(x, y); const row = el && el.closest('#masterGrid .mg-row[data-date]'); return row && row.dataset.date !== 'PRE' ? row : null; }
+  function moveGhost() {
+    if (!drag || !drag.active) return;
+    drag.ghost.style.left = (drag.x - drag.dx) + 'px'; drag.ghost.style.top = (drag.y - drag.dy) + 'px';
+    document.querySelectorAll('.mg-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+    const row = rowUnder(drag.x, drag.y);
+    if (row) row.classList.add('drop-target');
+  }
+  function endDrag(drop) {
+    if (!drag) return;
+    clearTimeout(drag.timer); clearInterval(drag.scroll);
+    const d = drag; drag = null;
+    if (!d.active) return;
+    dragEndedAt = Date.now();
+    d.ghost.remove(); d.el.classList.remove('drag-src');
+    document.querySelectorAll('.mg-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+    const row = drop && rowUnder(d.x, d.y);
+    if (row && row.dataset.date !== d.from) moveItem(d.key, d.from, row.dataset.date);
+  }
+  function moveItem(key, from, to) {
+    const [kind, id] = key.split(':');
+    if (kind === 'exp') {
+        const e = (state.expenses || []).find(x => x.id == id);
+        if (e) e.date = to;
+    } else {
+        const p = (state.plans || []).find(x => x.id == id);
+        if (!p) return;
+        const group = samePlanGroup(p).concat([p]).filter((q, i, a) => a.indexOf(q) === i);
+        if (kind === 'checkout') {
+            if (to < p.date) { alert('Check-out can\'t be before check-in.'); return; }
+            group.forEach(q => q.endDate = to);
+        } else {
+            const shift = dayDiff(p.date, to);
+            if (p.type === 'arrive') {
+                const ret = returnPlanFor(p);
+                if (ret && ret.date < to) { alert('That would be after the return flight. Change the return date first.'); return; }
+            }
+            if (p.type === 'depart') {
+                const arr = (state.plans || []).find(x => x.type === 'arrive' && planPeople(x).includes(p.member));
+                if (arr && to < arr.date) { alert('That would be before the arrival.'); return; }
+            }
+            group.forEach(q => { q.date = to; if (q.type === 'hotel' && q.endDate) q.endDate = addDays(q.endDate, shift); });
+        }
+    }
+    saveAll(); renderCalendar();
+  }
+
   function shiftCalMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); }
   function selectCalDay(ds) { calSelected = ds; renderCalendar(); }
   function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (state.members[i] ?? 'ALL'); renderCalendar(); }
