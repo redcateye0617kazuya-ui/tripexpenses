@@ -795,8 +795,11 @@
   // Tick / untick anyone in a "want to go" activity
   function joinRow(p) {
     if (isTravel(p)) return '';
-    const people = planPeople(p);
-    return `<span class="join-row">${(state.members || []).map((m, i) => `<button onclick="event.stopPropagation(); togglePlanPerson('${p.id}', ${i})" class="join-dot ${people.includes(m) ? 'on' : ''}" style="--c:${memberColor(m)}" title="${esc(m)}">${esc([...m][0] || '?').toUpperCase()}</button>`).join('')}</span>`;
+    const people = planPeople(p), members = state.members || [];
+    // only the people taking part get a circle (tap to take them out); + opens the plan to add someone
+    const dots = members.map((m, i) => people.includes(m) ? `<button onclick="event.stopPropagation(); togglePlanPerson('${p.id}', ${i})" class="join-dot on" style="--c:${memberColor(m)}" title="${esc(m)}">${esc([...m][0] || '?').toUpperCase()}</button>` : '').join('');
+    const add = members.some(m => !people.includes(m)) ? `<button onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="join-dot" style="--c:#b5aca3" title="Add someone">+</button>` : '';
+    return `<span class="join-row">${dots}${add}</span>`;
   }
   function togglePlanPerson(id, mi) {
     const p = (state.plans || []).find(x => x.id == id), m = (state.members || [])[mi];
@@ -804,6 +807,7 @@
     const group = samePlanGroup(p);
     if (planPeople(p).includes(m)) {
         if (planPeople(p).length <= 1) { alert('Someone needs to be in it. Delete the plan instead.'); return; }
+        if (!confirm(`Take ${m} out of "${p.place}"?`)) return;
         group.forEach(q => { q.with = (q.with || []).filter(x => x !== m); if (q.member === m) q.member = q.with.shift() || null; });
         // records left with nobody go away; their linked expenses move to a record that's left
         const keep = group.find(q => q.member);
