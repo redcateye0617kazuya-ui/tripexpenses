@@ -73,6 +73,12 @@
     @supports (-webkit-touch-callout: none) {
       .sheet input[type="date"], .sheet input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 48px; line-height: 20px; }
     }
+    /* simple line icons: a plane outline (level = arrive, nose up = depart) and a circled H for hotels */
+    .ic { display: inline-block; width: 1.45em; height: 1.45em; vertical-align: -0.35em; flex-shrink: 0; }
+    .ic-h { display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em; min-width: 13px; min-height: 13px; border: 1.5px solid currentColor; border-radius: 50%; font-size: max(0.75em, 8px); font-weight: 800; line-height: 1; vertical-align: -0.15em; font-family: Inter, sans-serif; flex-shrink: 0; }
+    .plan-mark .ic { width: 14px; height: 14px; vertical-align: middle; }
+    .plan-mark .ic-h { width: 13px; height: 13px; font-size: 8px; }
+    .mg-plane .ic { width: 15px; height: 15px; display: block; }
   </style>
 </head>
 <body class="p-0">
@@ -171,7 +177,7 @@
                 </div>
                 <div class="grid grid-cols-7 gap-1 text-center text-[9px] font-bold opacity-40"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
                 <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
-                <p class="text-[9px] text-center opacity-40 font-bold">🛬 Arrive &nbsp;•&nbsp; 🛫 Depart &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
+                <p class="text-[9px] text-center opacity-40 font-bold"><span data-ic="arrive"></span> Arrive &nbsp;•&nbsp; <span data-ic="depart"></span> Depart &nbsp;•&nbsp; <span data-ic="hotel"></span> Hotel &nbsp;•&nbsp; ● Want to go &nbsp;•&nbsp; Shaded = trip days</p>
             </div>
             <div id="calDayDetail"></div>
             </div>
@@ -209,7 +215,7 @@
         <h3 id="planModalTitle" class="serif text-2xl mb-8 text-center font-bold">Plan</h3>
         <input type="hidden" id="planId">
         <div class="space-y-6">
-            <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn">🛬 Arrive</button><button id="planTypeDepart" onclick="setPlanType('depart')" class="seg-btn hidden">🛫 Depart</button><button id="planTypeHotel" onclick="setPlanType('hotel')" class="seg-btn">🏨 Hotel</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
+            <div class="flex gap-3"><button id="planTypeArrive" onclick="setPlanType('arrive')" class="seg-btn"><span data-ic="arrive"></span> Arrive</button><button id="planTypeDepart" onclick="setPlanType('depart')" class="seg-btn hidden"><span data-ic="depart"></span> Depart</button><button id="planTypeHotel" onclick="setPlanType('hotel')" class="seg-btn"><span data-ic="hotel"></span> Hotel</button><button id="planTypeVisit" onclick="setPlanType('visit')" class="seg-btn">📍 Want to go</button></div>
             <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Who's going</p><div id="planWho" onchange="prefillReturn()" class="grid grid-cols-2 gap-3 bg-white/50 rounded-3xl p-4"></div></div>
             <div class="flex gap-4"><div class="flex-1 min-w-0"><p id="planDateLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planTime"></div></div>
             <div><p id="planPlaceLabel" class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Place</p><input id="planPlace" type="text" placeholder="e.g. Kansai Airport / Osaka Castle"></div>
@@ -217,7 +223,7 @@
             <div id="planHotelSection" class="hidden flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Check-out</p><input type="date" id="planOutDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planOutTime"></div></div>
             <div id="planReturnSection" class="hidden bg-white/50 rounded-3xl p-4 space-y-4">
                 <input type="hidden" id="planRetId">
-                <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest ml-2">🛫 Return flight <span class="opacity-60 normal-case tracking-normal">(optional)</span></p>
+                <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest ml-2"><span data-ic="depart"></span> Return flight <span class="opacity-60 normal-case tracking-normal">(optional)</span></p>
                 <div class="flex gap-4"><div class="flex-1 min-w-0"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Date</p><input type="date" id="planRetDate"></div><div class="w-32"><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Time</p><input type="time" id="planRetTime"></div></div>
                 <div><p class="text-[10px] font-bold opacity-40 mb-2 uppercase ml-2">Leaving from</p><input id="planRetPlace" type="text" placeholder="Same as arrival if empty"></div>
             </div>
@@ -782,8 +788,15 @@
   function memberColor(m) { const i = (state.members || []).indexOf(m); return i < 0 ? '#b5aca3' : MEMBER_COLORS[i % MEMBER_COLORS.length]; }
   // Arrive / depart are travel legs (no join ticks); 'hotel' is a stay from check-in (date) to check-out (endDate);
   // 'visit' is a want-to-go activity
+  // fill the icon placeholders in the static markup
+  document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = el.dataset.ic === 'hotel' ? icHotel() : icPlane(el.dataset.ic); }));
   function isTravel(p) { return p.type === 'arrive' || p.type === 'depart'; }
-  function typeIcon(p) { return p.type === 'arrive' ? '🛬' : p.type === 'depart' ? '🛫' : p.type === 'hotel' ? '🏨' : '📍'; }
+  const PLANE_PATH = 'M21.5 12 C21.5 11.3 20.8 10.9 19.5 10.9 H13.2 L8.6 3.2 H7 L9.6 10.9 H5.4 L3.6 8 H2.4 L3.2 10.9 C2.7 11.2 2.7 12.8 3.2 13.1 L2.4 16 H3.6 L5.4 13.1 H9.6 L7 20.8 H8.6 L13.2 13.1 H19.5 C20.8 13.1 21.5 12.7 21.5 12 Z';
+  function icPlane(kind) { const rot = kind === 'depart' ? -30 : 0; /* arrival: level; departure: climbing */ return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path transform="rotate(${rot} 12 12)" d="${PLANE_PATH}"/></svg>`; }
+  function icHotel() { return '<span class="ic-h" aria-hidden="true">H</span>'; }
+  function typeIcon(p) { return isTravel(p) ? icPlane(p.type) : p.type === 'hotel' ? icHotel() : '📍'; }
+  // plain-text version for places that can't show icons (dropdown options)
+  function typeText(p) { return isTravel(p) ? '✈' : p.type === 'hotel' ? 'Ⓗ' : '📍'; }
   const TYPE_ORDER = { arrive: 0, hotel: 1, visit: 2, depart: 3 };
   // Within a day, things are ordered by time; without a time they sit where they usually happen
   const DEFAULT_TIME = { arrive: '00:00', visit: '12:00', hotel: '15:00', checkout: '11:00', depart: '23:58', expense: '23:59' };
@@ -853,7 +866,7 @@
     const sel = selectedId != null ? (state.plans || []).find(p => p.id == selectedId) : null;
     if (sel && !opts.some(p => samePlanGroup(p).some(q => q.id == sel.id))) opts.push(sel);
     row.classList.toggle('hidden', !opts.length);
-    document.getElementById('exPlan').innerHTML = '<option value="">— None —</option>' + opts.map(p => `<option value="${p.id}">${typeIcon(p)} ${esc(p.place)}</option>`).join('');
+    document.getElementById('exPlan').innerHTML = '<option value="">— None —</option>' + opts.map(p => `<option value="${p.id}">${typeText(p)} ${esc(p.place)}</option>`).join('');
     const match = sel ? opts.find(p => samePlanGroup(p).some(q => q.id == sel.id)) : null;
     document.getElementById('exPlan').value = match ? match.id : '';
   }
@@ -908,7 +921,9 @@
     for (let day = 1; day <= days; day++) {
         const d = new Date(y, mo, day), ds = fmtYMD(d);
         const inTrip = hasRange && d >= start && d <= end;
-        const marks = planMembers().concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !planMembers().includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type !== 'visit' ? typeIcon(p) : '●'}</span>`)).join('');
+        const dayList = byDate[ds] || [];
+        const marks = planMembers().concat([...new Set(dayList.map(p => p.member))].filter(m => !planMembers().includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(dayList.filter(p => p.type !== 'hotel'), m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type !== 'visit' ? typeIcon(p) : '●'}</span>`)).join('')
+            + [...new Set(dayList.filter(p => p.type === 'hotel').map(p => normPlace(p.place)))].map(() => `<span class="plan-mark" style="color:#6d5d51">${icHotel()}</span>`).join('');
         g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
                 <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
                 <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
@@ -927,7 +942,7 @@
         ${groups.length ? groups.map(({ m, items }) => `<div class="app-card p-5 space-y-3">
             <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${memberColor(m)}"></span><p class="font-bold text-sm">${esc(m)}</p></div>
             ${items.map(p => `<div class="flex justify-between items-center gap-3">
-                <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? '🛬 Arrive · ' : p.type === 'depart' ? '🛫 Depart · ' : p.type === 'hotel' ? '🏨 ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
+                <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? icPlane('arrive') + ' Arrive · ' : p.type === 'depart' ? icPlane('depart') + ' Depart · ' : p.type === 'hotel' ? icHotel() + ' ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
                 ${p.type === 'hotel' ? `<p class="text-[10px] opacity-60 font-bold">Check-in ${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''} → Check-out ${p.endDate ? fmtShort(p.endDate) : '?'}${p.endTime ? ' ' + esc(p.endTime) : ''}</p>` : ''}
                 ${p.time && p.type !== 'hotel' || p.note ? `<p class="text-[10px] opacity-60 font-bold">${p.type !== 'hotel' ? esc(p.time || '') : ''}${p.time && p.type !== 'hotel' && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
                 <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p>${joinRow(p)}</div>
@@ -938,7 +953,7 @@
       </div>`;
   }
   // Master calendar: one row per date (pre-trip, trip days, any other dated day) and a column per person.
-  // Items for several people span their columns; each person's stay (arrive -> depart) is a line with a ✈ at
+  // Items for several people span their columns; each person's stay (arrive -> depart) is a line with a plane at
   // each end, and hotel nights are shaded in the guests' columns.
   function renderMaster(plans, start, end, hasRange) {
     const members = planMembers();
@@ -991,9 +1006,9 @@
                 const to = st.to || lastDate;
                 if (ds < st.from || ds > to) return;
                 const x = `calc(${st.i} * 100% / ${N} + 8px)`;
-                // the ✈ sits level with the first item of the row (the arrival / departure itself)
+                // the plane sits level with the first item of the row (the arrival / departure itself)
                 layers += `<div class="mg-stay ${st.to ? '' : 'open'}" style="--c:${st.c}; left:${x}; top:${ds === st.from ? '18px' : '0'}; ${ds === st.to ? 'height:18px' : 'bottom:0'}"></div>`;
-                if (ds === st.from || ds === st.to) layers += `<span class="mg-plane" style="--c:${st.c}; left:${x}; top:18px">✈</span>`;
+                if (ds === st.from || ds === st.to) layers += `<span class="mg-plane" style="--c:${st.c}; left:${x}; top:18px">${icPlane(ds === st.from ? 'arrive' : 'depart')}</span>`;
             });
         }
         // items: plans on this day and hotel check-outs, in time order; plans span their people's columns
@@ -1001,12 +1016,12 @@
         uniq(plans.filter(p => p.date === ds)).forEach(p => runs(planPeople(p).map(col).filter(i => i >= 0)).forEach(rn => {
             // hotels are a single slim line (the shaded columns already show who's staying)
             const html = p.type === 'hotel'
-                ? chip(rn, `🏨 ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true)
+                ? chip(rn, `${icHotel()} ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true)
                 : chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, p.time ? esc(p.time) : '', `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id);
             items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html });
         }));
         uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => runs(planPeople(h).map(col).filter(i => i >= 0)).forEach(rn =>
-            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `🏨 <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true) })));
+            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true) })));
         const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
@@ -1187,7 +1202,7 @@
         rec.endDate = out; rec.endTime = document.getElementById('planOutTime').value || '';
     }
     if (planType === 'arrive') {
-        // the arrival form can also hold the return flight: saved as that person's 🛫 Depart plan
+        // the arrival form can also hold the return flight: saved as that person's Depart plan
         const retDate = document.getElementById('planRetDate').value;
         const retId = document.getElementById('planRetId').value;
         if (retDate) {
