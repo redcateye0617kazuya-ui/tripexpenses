@@ -595,7 +595,7 @@
     document.getElementById('depositList').innerHTML = (state.poolDeposits || []).map(d => `<div class="text-[9px] bg-white/40 p-2 rounded-xl flex justify-between items-center"><span>+ ${d.curr} ${d.amt}</span><div class="flex items-center gap-2"><button onclick="editDeposit('${d.id}')" class="text-blue-400 font-bold px-1">✎</button><button onclick="deleteDeposit(${d.id})" class="text-red-300 px-2">×</button></div></div>`).join('');
   }
 
-  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; saveAll(); changeMembers(() => []); } }
+  function resetAllData() { if (confirm(`🚨 RESET CURRENT TRIP?`)) { state.members = []; state.expenses = []; state.poolDeposits = []; state.plans = []; state.ledgerOnly = []; saveAll(); changeMembers(() => []); } }
   function openModal(date) { const isD = (date === 'DEPOSIT'); document.getElementById('modalTitle').innerText = isD ? 'Deposit Pool' : 'Record'; document.getElementById('exDate').value = date || 'PRE'; document.getElementById('exId').value = ''; document.getElementById('exDesc').parentElement.classList.toggle('hidden', isD); document.getElementById('payerSection').classList.toggle('hidden', isD); document.getElementById('modal').classList.remove('hidden'); document.getElementById('exDesc').value = ''; document.getElementById('exAmt').value = ''; document.getElementById('exCurr').value = state.targetCurr; document.getElementById('usePool').checked = false; togglePoolPayer(false); fillExpensePlanOptions(isD ? null : (date || 'PRE'), null); }
   function editExpense(id) { const e = state.expenses.find(x => x.id == id); if (!e) return; openModal(e.date); document.getElementById('exId').value = e.id; document.getElementById('exDesc').value = e.desc; document.getElementById('exAmt').value = e.amt; document.getElementById('exCurr').value = e.curr; document.getElementById('usePool').checked = e.isPool; togglePoolPayer(e.isPool); if (!e.isPool) { document.getElementById('exPayer').value = e.payer; document.querySelectorAll('#modalSplit input').forEach(i => i.checked = (e.splitWith || []).includes(i.value)); } fillExpensePlanOptions(e.date, e.planId); }
   function editDeposit(id) { const d = state.poolDeposits.find(x => x.id == id); if (!d) return; openModal('DEPOSIT'); document.getElementById('exId').value = d.id; document.getElementById('exAmt').value = d.amt; document.getElementById('exCurr').value = d.curr; }
@@ -703,13 +703,21 @@
   }
   async function handleCurrChange() { state.targetCurr = document.getElementById('targetCurr').value; if (!(await fetchLiveRate())) saveAll(); }
   async function fetchLiveRate() { try { const res = await fetch(`https://open.er-api.com/v6/latest/HKD`); const data = await res.json(); if (data && data.rates[state.targetCurr]) { document.getElementById('currentRateVal').value = parseFloat(data.rates[state.targetCurr].toFixed(4)); saveAll(); return true; } } catch (e) {} return false; }
-  function addMember() { const n = (prompt("Name of someone who won't sign in?") || '').trim(); if(n) { if (state.members.includes(n)) { alert(`${n} already exists.`); return; } changeMembers(arr => arr.includes(n) ? arr : [...arr, n]); } }
+  function addMember() {
+    const n = (prompt("Add someone for splitting money only (they won't appear in the calendar). Name?") || '').trim();
+    if (!n) return;
+    if (state.members.includes(n)) { alert(`${n} already exists.`); return; }
+    state.ledgerOnly = [...new Set([...(state.ledgerOnly || []), n])]; saveAll();
+    changeMembers(arr => arr.includes(n) ? arr : [...arr, n]);
+  }
   function removeMember(i) {
     const n = state.members[i];
     if (n === undefined) return;
     const key = linkedKeyOf(state, n);
     if (key) return removePerson(key);
-    if (confirm(`Remove ${n}?`)) changeMembers(arr => arr.filter(m => m !== n));
+    if (!confirm(`Remove ${n}?`)) return;
+    if ((state.ledgerOnly || []).includes(n)) { state.ledgerOnly = state.ledgerOnly.filter(m => m !== n); saveAll(); }
+    changeMembers(arr => arr.filter(m => m !== n));
   }
   function deleteExp(id) { state.expenses = state.expenses.filter(e => e.id != id); saveAll(); }
   function deleteDeposit(id) { state.poolDeposits = state.poolDeposits.filter(d => d.id != id); saveAll(); }
@@ -756,6 +764,9 @@
   let calMode = 'master';
   try { calMode = localStorage.getItem('tripLedger_calMode') || 'master'; } catch (e) {}
   function setCalMode(m) { calMode = m; try { localStorage.setItem('tripLedger_calMode', m); } catch (e) {} renderCalendar(); }
+  // Names added with "+" are for splitting money only (state.ledgerOnly) and stay out of the calendar,
+  // unless someone later signs in and picks that name
+  function planMembers() { const lo = state.ledgerOnly || []; return (state.members || []).filter(m => !lo.includes(m) || linkedKeyOf(state, m)); }
   function memberColor(m) { const i = (state.members || []).indexOf(m); return i < 0 ? '#b5aca3' : MEMBER_COLORS[i % MEMBER_COLORS.length]; }
   // Arrive / depart are travel legs (no join ticks); 'hotel' is a stay from check-in (date) to check-out (endDate);
   // 'visit' is a want-to-go activity
@@ -792,7 +803,7 @@
     const people = planPeople(p), members = state.members || [];
     // only the people taking part get a circle (tap to take them out); + opens the plan to add someone
     const dots = members.map((m, i) => people.includes(m) ? `<button onclick="event.stopPropagation(); togglePlanPerson('${p.id}', ${i})" class="join-dot on" style="--c:${memberColor(m)}" title="${esc(m)}">${esc([...m][0] || '?').toUpperCase()}</button>` : '').join('');
-    const add = members.some(m => !people.includes(m)) ? `<button onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="join-dot" style="--c:#b5aca3" title="Add someone">+</button>` : '';
+    const add = planMembers().some(m => !people.includes(m)) ? `<button onclick="event.stopPropagation(); openPlanModal('${p.id}')" class="join-dot" style="--c:#b5aca3" title="Add someone">+</button>` : '';
     return `<span class="join-row">${dots}${add}</span>`;
   }
   function togglePlanPerson(id, mi) {
@@ -855,7 +866,7 @@
     const hasRange = start && end && start <= end;
     if (!calSelected) calSelected = fmtYMD(start || new Date());
     if (!calMonth) { const base = parseYMD(calSelected); calMonth = new Date(base.getFullYear(), base.getMonth(), 1); }
-    if (calFilter !== 'ALL' && !(state.members || []).includes(calFilter)) calFilter = 'ALL';
+    if (calFilter !== 'ALL' && !planMembers().includes(calFilter)) calFilter = 'ALL';
 
     const allPlans = (state.plans || []).slice().sort(sortPlans);
     const plans = allPlans.filter(p => calFilter === 'ALL' || planPeople(p).includes(calFilter));
@@ -863,7 +874,7 @@
     plans.forEach(p => (byDate[p.date] = byDate[p.date] || []).push(p));
 
     // Arrivals & departures: when and where each person lands and leaves
-    const members = state.members || [];
+    const members = planMembers();
     const legs = (m, type) => plansFor(allPlans.filter(p => p.type === type), m);
     const hotelLine = m => { const hs = legs(m, 'hotel'); return hs.length ? `<div class="flex gap-2"><span class="w-12 flex-shrink-0 text-[9px] font-bold uppercase opacity-40 pt-0.5">Hotel</span><div class="flex-1 space-y-0.5">${hs.map(h => `<p><span class="font-bold opacity-60">${fmtShort(h.date)}–${h.endDate ? fmtShort(h.endDate) : '?'}</span> · ${esc(h.place)}</p>`).join('')}</div></div>` : ''; };
     const legLine = (label, list) => `<div class="flex gap-2"><span class="w-12 flex-shrink-0 text-[9px] font-bold uppercase opacity-40 pt-0.5">${label}</span><div class="flex-1 space-y-0.5">${list.length ? list.map(p => `<p><span class="font-bold opacity-60">${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''}</span> · ${esc(p.place)}</p>`).join('') : '<p class="opacity-30 italic">Not set</p>'}</div></div>`;
@@ -892,7 +903,7 @@
     for (let day = 1; day <= days; day++) {
         const d = new Date(y, mo, day), ds = fmtYMD(d);
         const inTrip = hasRange && d >= start && d <= end;
-        const marks = (state.members || []).concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !(state.members || []).includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type !== 'visit' ? typeIcon(p) : '●'}</span>`)).join('');
+        const marks = planMembers().concat([...new Set((byDate[ds] || []).map(p => p.member))].filter(m => !planMembers().includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(byDate[ds] || [], m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type !== 'visit' ? typeIcon(p) : '●'}</span>`)).join('');
         g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
                 <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
                 <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
@@ -925,7 +936,7 @@
   // Items for several people span their columns; each person's stay (arrive -> depart) is a line with a ✈ at
   // each end, and hotel nights are shaded in the guests' columns.
   function renderMaster(plans, start, end, hasRange) {
-    const members = state.members || [];
+    const members = planMembers();
     const people = calFilter === 'ALL' ? [...new Set([...members, ...plans.flatMap(planPeople)])] : [calFilter];
     const N = people.length;
     // Personal expenses sit in the payer's box on that day; pool-paid ones aren't shown here
@@ -1086,7 +1097,7 @@
 
   function shiftCalMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); }
   function selectCalDay(ds) { calSelected = ds; renderCalendar(); }
-  function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (state.members[i] ?? 'ALL'); renderCalendar(); }
+  function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (planMembers()[i] ?? 'ALL'); renderCalendar(); }
 
   let planType = 'visit';
   function setPlanType(t) {
@@ -1104,20 +1115,20 @@
     document.getElementById('planPlaceLabel').innerText = t === 'arrive' ? 'Arriving at' : t === 'depart' ? 'Leaving from' : t === 'hotel' ? 'Hotel' : 'Place';
   }
   function openPlanModal(id, presetDate, presetMemberIdx) {
-    if (!(state.members || []).length) { alert('Add a member first.'); return; }
+    if (!planMembers().length) { alert('Invite someone to the trip first.'); return; }
     const p = id ? (state.plans || []).find(x => x.id == id) : null;
     if (id && !p) return;
     if (p && p.type === 'depart') {
         const arr = (state.plans || []).find(x => x.type === 'arrive' && (x.returnId == p.id || planPeople(x).includes(p.member)));
         if (arr) return openPlanModal(String(arr.id));
     }
-    const members = state.members.slice();
+    const members = planMembers().slice();
     const going = p ? [p.member, ...(p.with || [])] : [];
     going.forEach(m => { if (m && !members.includes(m)) members.push(m); });
     document.getElementById('planModalTitle').innerText = p ? 'Edit Plan' : 'New Plan';
     document.getElementById('planId').value = p ? p.id : '';
     document.getElementById('planDeleteBtn').classList.toggle('hidden', !p);
-    const presetMember = presetMemberIdx != null ? state.members[presetMemberIdx] : null;
+    const presetMember = presetMemberIdx != null ? planMembers()[presetMemberIdx] : null;
     const checked = p ? going : [presetMember || (calFilter !== 'ALL' ? calFilter : members[0])];
     document.getElementById('planWho').innerHTML = members.map(m => `<label class="flex items-center gap-2 p-2 bg-white rounded-xl"><input type="checkbox" value="${esc(m)}" ${checked.includes(m) ? 'checked' : ''}> <span class="text-xs font-bold">${esc(m)}</span></label>`).join('');
     const linked = p ? planExpenses(p) : [];
