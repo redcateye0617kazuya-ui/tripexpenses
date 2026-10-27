@@ -61,9 +61,18 @@
     .mg-row.drop-target .mg-cells { background: rgba(109, 93, 81, 0.10); }
     .plan-chip.drag-src { opacity: 0.35; }
     .drag-ghost { position: fixed; z-index: 200; pointer-events: none; opacity: 0.9; transform: rotate(-2deg); box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
+    .mg-cells .plan-chip.slim { padding: 2px 6px; font-size: 10px; line-height: 1.3; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-cells .plan-chip { position: relative; z-index: 4; margin: 3px 5px 3px 15px; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate, #planRetDate, #planOutDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
+    /* pop-up windows scroll up/down only, and the page behind stays still while one is open */
+    .sheet { overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    .sheet input, .sheet select { min-width: 0; max-width: 100%; }
+    body:has(#modal:not(.hidden)), body:has(#planModal:not(.hidden)), body:has(#shareModal:not(.hidden)) { overflow: hidden; }
+    /* iPhone draws date/time boxes wider than their column; keep them inside it */
+    @supports (-webkit-touch-callout: none) {
+      .sheet input[type="date"], .sheet input[type="time"] { -webkit-appearance: none; appearance: none; min-height: 48px; line-height: 20px; }
+    }
   </style>
 </head>
 <body class="p-0">
@@ -172,7 +181,7 @@
   </main>
 
   <div id="modal" onclick="if (event.target === this) closeModal()" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
-    <div class="relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="sheet relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <button onclick="closeModal()" aria-label="Close" class="absolute top-5 right-6 w-9 h-9 rounded-full bg-white/80 text-lg font-bold opacity-60 shadow-sm">✕</button>
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 id="modalTitle" class="serif text-2xl mb-8 text-center font-bold">Record</h3>
@@ -194,7 +203,7 @@
   </div>
 
   <div id="planModal" onclick="if (event.target === this) closePlanModal()" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
-    <div class="relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="sheet relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <button onclick="closePlanModal()" aria-label="Close" class="absolute top-5 right-6 w-9 h-9 rounded-full bg-white/80 text-lg font-bold opacity-60 shadow-sm">✕</button>
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 id="planModalTitle" class="serif text-2xl mb-8 text-center font-bold">Plan</h3>
@@ -220,7 +229,7 @@
   </div>
 
   <div id="shareModal" onclick="if (event.target === this) closeShareModal()" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center md:justify-center">
-    <div class="relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="sheet relative bg-[#f1ede4] w-full md:max-w-lg rounded-t-[40px] md:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <button onclick="closeShareModal()" aria-label="Close" class="absolute top-5 right-6 w-9 h-9 rounded-full bg-white/80 text-lg font-bold opacity-60 shadow-sm">✕</button>
         <div class="w-12 h-1.5 bg-gray-300 mx-auto mb-8 rounded-full"></div>
         <h3 class="serif text-2xl mb-2 text-center font-bold">Who can see this trip</h3>
@@ -963,9 +972,9 @@
     }).filter(Boolean);
     const hotelSpans = uniq(hotels).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(r => ({ ...r, from: h.date, to: h.endDate || h.date, c: memberColor(people[r.s]) })));
 
-    const chip = (r, label, sub, onclick, extra = '', drag = '') => {
+    const chip = (r, label, sub, onclick, extra = '', drag = '', slim = false) => {
         const c = r.w > 1 ? '#6d5d51' : memberColor(people[r.s]);
-        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip" style="grid-column:${r.s + 1} / span ${r.w}; background:${r.w > 1 ? '#efe7dc' : c + '22'}; border-left:3px solid ${c}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
+        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip${slim ? ' slim' : ''}" style="grid-column:${r.s + 1} / span ${r.w}; background:${r.w > 1 ? '#efe7dc' : c + '22'}; border-left:3px solid ${c}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
     };
     const head = `<div class="mg-row mg-head"><div class="mg-date"><span class="text-[9px] opacity-50 uppercase">Date</span></div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${people.map(m => `<div><span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style="background:${memberColor(m)}"></span>${esc(m)}</div>`).join('')}</div></div>`;
     const body = rows.map(r => {
@@ -990,11 +999,14 @@
         // items: plans on this day and hotel check-outs, in time order; plans span their people's columns
         const items = [];
         uniq(plans.filter(p => p.date === ds)).forEach(p => runs(planPeople(p).map(col).filter(i => i >= 0)).forEach(rn => {
-            const sub = p.type === 'hotel' ? `Check-in${p.time ? ' ' + esc(p.time) : ''}` : (p.time ? esc(p.time) : '');
-            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html: chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, sub, `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id) });
+            // hotels are a single slim line (the shaded columns already show who's staying)
+            const html = p.type === 'hotel'
+                ? chip(rn, `🏨 ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true)
+                : chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, p.time ? esc(p.time) : '', `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id);
+            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html });
         }));
         uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => runs(planPeople(h).map(col).filter(i => i >= 0)).forEach(rn =>
-            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `🏨 Check-out`, `${esc(h.place)}${h.endTime ? ' · ' + esc(h.endTime) : ''}`, `openPlanModal('${h.id}')`, '', 'checkout:' + h.id) })));
+            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `🏨 <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true) })));
         const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
