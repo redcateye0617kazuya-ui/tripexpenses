@@ -990,14 +990,15 @@
     }).filter(Boolean);
     const hotelSpans = uniq(hotels).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(r => ({ ...r, from: h.date, to: h.endDate || h.date, c: memberColor(people[r.s]) })));
 
-    // each kind has its own colours so they don't get mixed up: hotels beige, activities indigo, flights blue-grey
+    // each kind has its own colours so they don't get mixed up: hotels dark brown, activities beige, flights blue-grey
     // (a flight for one person keeps that person's colour)
-    const KIND_STYLE = { hotel: { bg: '#efe7dc', edge: '#8c7a6b' }, visit: { bg: '#e6e6fb', edge: '#5b5fc7' }, travel: { bg: '#e8edf4', edge: '#5b7695' } };
+    const KIND_STYLE = { hotel: { bg: '#6b4f3f', edge: '#4a362b', fg: '#ffffff' }, visit: { bg: '#efe7dc', edge: '#8c7a6b' }, travel: { bg: '#e8edf4', edge: '#5b7695' } };
     const chip = (r, label, sub, onclick, extra = '', drag = '', slim = false, kind = 'visit') => {
         const k = KIND_STYLE[kind] || KIND_STYLE.visit, one = r.w === 1;
         const edge = kind === 'travel' && one ? memberColor(people[r.s]) : k.edge;
-        const bg = kind === 'travel' && one ? memberColor(people[r.s]) + '22' : k.bg;
-        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip${slim ? ' slim' : ''}" style="grid-column:${r.s + 1} / span ${r.w}; background:${bg}; border-left:3px solid ${edge}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
+        // boxes shared by several people are a little see-through, so the lines and shading behind still show
+        const bg = kind === 'travel' && one ? memberColor(people[r.s]) + '22' : one ? k.bg : k.bg + (kind === 'hotel' ? 'd9' : 'b8');
+        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip${slim ? ' slim' : ''}" style="grid-column:${r.s + 1} / span ${r.w}; background:${bg}; border-left:3px solid ${edge};${k.fg ? ` color:${k.fg};` : ''}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
     };
     const head = `<div class="mg-row mg-head"><div class="mg-date"><span class="text-[9px] opacity-50 uppercase">Date</span></div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${people.map(m => `<div><span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style="background:${memberColor(m)}"></span>${esc(m)}</div>`).join('')}</div></div>`;
     const body = rows.map(r => {
@@ -1008,7 +1009,7 @@
         let layers = people.map((m, i) => { const mi = members.indexOf(m); return `<div class="mg-zone" style="${pos(i)}" ${ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${ds}', ${mi})"` : ''}></div>`; }).join('');
         if (ds !== 'PRE') {
             hotelSpans.filter(h => ds >= h.from && ds <= h.to).forEach(h => {
-                layers += `<div class="mg-band" style="${pos(h.s, h.w)} background:${h.c}14; ${ds === h.from ? 'top:50%;' : ''}${ds === h.to ? 'bottom:50%;' : ''}"></div>`;
+                layers += `<div class="mg-band" style="${pos(h.s, h.w)} background:#6b4f3f14; ${ds === h.from ? 'top:50%;' : ''}${ds === h.to ? 'bottom:50%;' : ''}"></div>`;
             });
             stays.forEach(st => {
                 const to = st.to || lastDate;
