@@ -85,10 +85,10 @@
     .mg-plane .ic { width: 15px; height: 15px; display: block; }
     /* day timeline: a line down the left, a dot per item */
     .timeline { position: relative; padding-left: 22px; }
-    .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: #e4dbcf; border-radius: 2px; }
+    .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: #d9cfc1; border-radius: 2px; }
     .tl-item { position: relative; padding-bottom: 14px; }
     .tl-item:last-child { padding-bottom: 0; }
-    .tl-dot { position: absolute; left: -21px; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px #e4dbcf; }
+    .tl-dot { position: absolute; left: -21px; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-cream); box-shadow: 0 0 0 1px #d9cfc1; }
   </style>
 </head>
 <body class="p-0">
@@ -971,7 +971,7 @@
     ].map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k);
     document.getElementById('calDayDetail').innerHTML = `<div class="space-y-4">
         <div class="flex justify-between items-end px-2"><p class="serif text-2xl font-bold">${dayNo ? 'Day ' + dayNo : sel.toLocaleDateString('en-US', { weekday: 'long' })}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${calSelected.replace(/-/g, '/')}</p></div>
-        ${rows.length ? `<div class="app-card p-5"><div class="timeline">${rows.map(r => r.html).join('')}</div></div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
+        ${rows.length ? `<div class="px-3 pt-1"><div class="timeline">${rows.map(r => r.html).join('')}</div></div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
         <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
       </div>`;
   }
