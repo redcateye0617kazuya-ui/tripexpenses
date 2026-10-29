@@ -40,7 +40,7 @@
     input[type="time"] { background: #ffffff; border-radius: 20px; padding: 14px 18px; font-size: 16px !important; color: var(--main-brown); width: 100%; border: none; text-align: center; }
     .master-wrap { overflow-x: auto; border-radius: 20px; }
     /* Master calendar grid: a row per date; inside it a grid with a column per person, so an item for several
-       people can span their columns. Stays (arrive -> depart) and hotel nights are drawn behind the items. */
+       people can span their columns. Stays (arrive -> depart) are drawn behind the items. */
     .mg { font-size: 11px; }
     .mg-row { display: flex; border-bottom: 1px solid #efe9e1; }
     .mg-row.out-trip { opacity: 0.55; }
@@ -50,7 +50,6 @@
     .mg-head .mg-cells { min-height: 0; padding: 6px 0; }
     .mg-head .mg-cells > div { padding: 0 8px 0 14px; font-weight: 700; white-space: nowrap; }
     .mg-zone { position: absolute; top: 0; bottom: 0; border-right: 1px solid #efe9e1; cursor: pointer; z-index: 0; }
-    .mg-band { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
     .mg-stay { position: absolute; width: 0; border-left: 2px solid var(--c); z-index: 2; pointer-events: none; }
     .mg-stay.open { border-left-style: dashed; }
     .mg-plane { position: absolute; font-size: 11px; line-height: 1; color: var(--c); transform: translate(-50%, -50%); z-index: 3; pointer-events: none; }
@@ -956,7 +955,7 @@
   }
   // Master calendar: one row per date (pre-trip, trip days, any other dated day) and a column per person.
   // Items for several people span their columns; each person's stay (arrive -> depart) is a line with a plane at
-  // each end, and hotel nights are shaded in the guests' columns.
+  // each end.
   function renderMaster(plans, start, end, hasRange) {
     const members = planMembers();
     const people = calFilter === 'ALL' ? [...new Set([...members, ...plans.flatMap(planPeople)])] : [calFilter];
@@ -988,7 +987,6 @@
         const dep = all.filter(p => p.type === 'depart' && planPeople(p).includes(m)).map(p => p.date).sort().pop();
         return arr ? { i: col(m), c: memberColor(m), from: arr, to: dep && dep >= arr ? dep : null } : null;
     }).filter(Boolean);
-    const hotelSpans = uniq(hotels).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(r => ({ ...r, from: h.date, to: h.endDate || h.date, c: memberColor(people[r.s]) })));
 
     // each kind has its own colours so they don't get mixed up: hotels light brown, activities dark brown, flights blue-grey
     // (a flight for one person keeps that person's colour)
@@ -1008,9 +1006,6 @@
             : `<p class="font-bold">${fmtShort(ds)}</p><p class="text-[9px] opacity-50 font-bold">${r.d.toLocaleDateString('en-US', { weekday: 'short' })}${r.dayNo ? ' · D' + r.dayNo : ''}</p>`;
         let layers = people.map((m, i) => { const mi = members.indexOf(m); return `<div class="mg-zone" style="${pos(i)}" ${ds !== 'PRE' && mi >= 0 ? `onclick="openPlanModal(null, '${ds}', ${mi})"` : ''}></div>`; }).join('');
         if (ds !== 'PRE') {
-            hotelSpans.filter(h => ds >= h.from && ds <= h.to).forEach(h => {
-                layers += `<div class="mg-band" style="${pos(h.s, h.w)} background:#a3825f1a; ${ds === h.from ? 'top:50%;' : ''}${ds === h.to ? 'bottom:50%;' : ''}"></div>`;
-            });
             stays.forEach(st => {
                 const to = st.to || lastDate;
                 if (ds < st.from || ds > to) return;
