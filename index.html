@@ -818,7 +818,10 @@
   // ---------- Activities: who's in them and what they cost ----------
   function normPlace(s) { return String(s || '').trim().toLowerCase(); }
   // Plans with the same type, day and place count as one activity (e.g. two friends both added "Osaka Castle")
-  function samePlanGroup(p) { return (state.plans || []).filter(q => q.type === p.type && q.date === p.date && normPlace(q.place) === normPlace(p.place)); }
+  // Each plan is its own item: only people added to the same plan (Who's going / the circles) share a box.
+  // Separate entries are never merged, even with the same place and time.
+  function planKey(p) { return 'id:' + p.id; }
+  function samePlanGroup(p) { return [p]; }
   function planPeople(p) {
     const set = new Set();
     samePlanGroup(p).concat([p]).forEach(q => [q.member, ...(q.with || [])].forEach(m => m && set.add(m)));
@@ -863,16 +866,16 @@
   function dayActivityTags(ds) {
     const seen = new Set();
     return (state.plans || []).filter(p => p.date === ds && p.type !== 'hotel').sort(sortPlans)
-        .filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; })
+        .filter(p => { const k = planKey(p); if (seen.has(k)) return false; seen.add(k); return true; })
         .map(p => { const c = memberColor(planPeople(p)[0]); return `<button onclick="openPlanModal('${p.id}')" class="text-[10px] font-bold px-2 py-0.5 rounded-full max-w-[160px] truncate" title="${esc(p.place)}" style="background:${c}22; color:#6d5d51; border:1px solid ${c}55">${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${isTravel(p) ? planPeople(p).map(esc).join(', ') : esc(p.place)}</button>`; }).join('');
   }
   // Each person's plans for a day, one entry per activity
-  function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); }
+  function plansFor(list, m) { const seen = new Set(); return list.filter(p => planPeople(p).includes(m)).filter(p => { const k = planKey(p); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
   function fillExpensePlanOptions(date, selectedId) {
     const row = document.getElementById('exPlanRow');
     const seen = new Set();
-    const opts = (state.plans || []).filter(p => p.date === date).sort(sortPlans).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; });
+    const opts = (state.plans || []).filter(p => p.date === date).sort(sortPlans).filter(p => { const k = planKey(p); if (seen.has(k)) return false; seen.add(k); return true; });
     const sel = selectedId != null ? (state.plans || []).find(p => p.id == selectedId) : null;
     if (sel && !opts.some(p => samePlanGroup(p).some(q => q.id == sel.id))) opts.push(sel);
     row.classList.toggle('hidden', !opts.length);
@@ -934,7 +937,7 @@
         const dayList = byDate[ds] || [];
         // one mark per plan (not per person): ● activity, H hotel, plane for flights; at most 4, then +n
         const seenM = new Set();
-        const dayUniq = dayList.filter(p => { const k = p.type + '|' + normPlace(p.place); if (seenM.has(k)) return false; seenM.add(k); return true; }).sort(sortPlans);
+        const dayUniq = dayList.filter(p => { const k = planKey(p); if (seenM.has(k)) return false; seenM.add(k); return true; }).sort(sortPlans);
         const markOf = p => { const ppl = planPeople(p);
             if (p.type === 'visit') return `<span class="plan-mark" style="color:#8b6d58">●</span>`;
             if (p.type === 'hotel') return `<span class="plan-mark" style="color:#a3825f">${icHotel()}</span>`;
@@ -951,9 +954,9 @@
     const sel = parseYMD(calSelected);
     const dayNo = hasRange && sel >= start && sel <= end ? Math.round((sel - start) / 86400000) + 1 : null;
     const seenDay = new Set();
-    const dayPlans = (byDate[calSelected] || []).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
+    const dayPlans = (byDate[calSelected] || []).filter(p => { const k = planKey(p); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
     const checkouts = plans.filter(p => p.type === 'hotel' && p.endDate === calSelected && p.endDate !== p.date)
-        .filter(p => { const k = 'out|' + normPlace(p.place); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
+        .filter(p => { const k = 'out|' + planKey(p); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
     // a timeline: one line down the side, a dot per item, everyone's names first
     const names = p => planPeople(p).map(m => `<span style="color:${memberColor(m)}">${esc(m)}</span>`).join('<span class="opacity-40">, </span>');
     const dotColor = p => p.type === 'visit' ? '#8b6d58' : p.type === 'hotel' ? '#a3825f' : memberColor(planPeople(p)[0]);
@@ -1008,7 +1011,7 @@
     // same column widths everywhere; with more people the table scrolls sideways
     const COLW = 112, DATEW = 60;
     const span = idx => idx.length ? { s: Math.min(...idx), w: Math.max(...idx) - Math.min(...idx) + 1, idx } : null;
-    const uniq = list => { const seen = new Set(); return list.filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); };
+    const uniq = list => { const seen = new Set(); return list.filter(p => { const k = planKey(p); if (seen.has(k)) return false; seen.add(k); return true; }); };
 
     // stays: earliest arrival to latest departure per person (dashed to the last row if no return yet)
     const all = state.plans || [];
@@ -1055,11 +1058,11 @@
                 : isTravel(p)
                 ? chip(rn, `${typeIcon(p)} ${esc(p.place)}${p.time ? ` <span class="opacity-60 font-semibold">· ${esc(p.time)}</span>` : ''}`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true, 'travel')
                 : chip(rn, `${t}${esc(p.place)}`, '', `openPlanModal('${p.id}')`, joinRow(p), 'plan:' + p.id, false, 'visit');
-            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html });
+            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, c: rn.s, html });
         });
         uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => [span(planPeople(h).map(col).filter(i => i >= 0))].filter(Boolean).forEach(rn =>
             items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true, 'hotel') })));
-        const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
+        const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || (a.c ?? 0) - (b.c ?? 0) || a.k - b.k).map(x => x.html).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(${COLW}px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
     grid.style.setProperty('--dw', DATEW + 'px');
