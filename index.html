@@ -987,9 +987,14 @@
     }).filter(Boolean);
     const hotelSpans = uniq(hotels).flatMap(h => runs(planPeople(h).map(col).filter(i => i >= 0)).map(r => ({ ...r, from: h.date, to: h.endDate || h.date, c: memberColor(people[r.s]) })));
 
-    const chip = (r, label, sub, onclick, extra = '', drag = '', slim = false) => {
-        const c = r.w > 1 ? '#6d5d51' : memberColor(people[r.s]);
-        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip${slim ? ' slim' : ''}" style="grid-column:${r.s + 1} / span ${r.w}; background:${r.w > 1 ? '#efe7dc' : c + '22'}; border-left:3px solid ${c}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
+    // each kind has its own colours so they don't get mixed up: hotels beige, activities green, flights blue-grey
+    // (a box for one person keeps that person's colour on its edge)
+    const KIND_STYLE = { hotel: { bg: '#efe7dc', edge: '#8c7a6b' }, visit: { bg: '#e3f0e8', edge: '#4f8a6e' }, travel: { bg: '#e8edf4', edge: '#5b7695' } };
+    const chip = (r, label, sub, onclick, extra = '', drag = '', slim = false, kind = 'visit') => {
+        const k = KIND_STYLE[kind] || KIND_STYLE.visit, one = r.w === 1;
+        const edge = kind === 'hotel' ? k.edge : one ? memberColor(people[r.s]) : k.edge;
+        const bg = kind === 'travel' && one ? memberColor(people[r.s]) + '22' : k.bg;
+        return `<span onclick="event.stopPropagation(); if (!dragJustEnded()) ${onclick}" ${drag ? `data-drag="${drag}"` : ''} class="plan-chip${slim ? ' slim' : ''}" style="grid-column:${r.s + 1} / span ${r.w}; background:${bg}; border-left:3px solid ${edge}">${label}${sub ? `<span class="block text-[9px] opacity-60">${sub}</span>` : ''}${extra}</span>`;
     };
     const head = `<div class="mg-row mg-head"><div class="mg-date"><span class="text-[9px] opacity-50 uppercase">Date</span></div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${people.map(m => `<div><span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style="background:${memberColor(m)}"></span>${esc(m)}</div>`).join('')}</div></div>`;
     const body = rows.map(r => {
@@ -1016,12 +1021,12 @@
         uniq(plans.filter(p => p.date === ds)).forEach(p => runs(planPeople(p).map(col).filter(i => i >= 0)).forEach(rn => {
             // hotels are a single slim line (the shaded columns already show who's staying)
             const html = p.type === 'hotel'
-                ? chip(rn, `${icHotel()} ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true)
-                : chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, p.time ? esc(p.time) : '', `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id);
+                ? chip(rn, `${icHotel()} ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true, 'hotel')
+                : chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, p.time ? esc(p.time) : '', `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id, false, isTravel(p) ? 'travel' : 'visit');
             items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html });
         }));
         uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => runs(planPeople(h).map(col).filter(i => i >= 0)).forEach(rn =>
-            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true) })));
+            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true, 'hotel') })));
         const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
