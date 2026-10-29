@@ -83,6 +83,12 @@
     .plan-mark .ic { width: 14px; height: 14px; vertical-align: middle; }
     .plan-mark .ic-h { width: 13px; height: 13px; font-size: 8px; }
     .mg-plane .ic { width: 15px; height: 15px; display: block; }
+    /* day timeline: a line down the left, a dot per item */
+    .timeline { position: relative; padding-left: 22px; }
+    .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: #e4dbcf; border-radius: 2px; }
+    .tl-item { position: relative; padding-bottom: 14px; }
+    .tl-item:last-child { padding-bottom: 0; }
+    .tl-dot { position: absolute; left: -21px; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px #e4dbcf; }
   </style>
 </head>
 <body class="p-0">
@@ -935,30 +941,37 @@
     }
     document.getElementById('calGrid').innerHTML = g;
 
-    // Selected day: one list for everyone, in time order; each plan once (a solo plan starts with the person's name)
+    // Selected day: one timeline for everyone, in time order; each plan once, names first
     const sel = parseYMD(calSelected);
     const dayNo = hasRange && sel >= start && sel <= end ? Math.round((sel - start) / 86400000) + 1 : null;
     const seenDay = new Set();
     const dayPlans = (byDate[calSelected] || []).filter(p => { const k = p.type + '|' + normPlace(p.place); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
     const checkouts = plans.filter(p => p.type === 'hotel' && p.endDate === calSelected && p.endDate !== p.date)
         .filter(p => { const k = 'out|' + normPlace(p.place); if (seenDay.has(k)) return false; seenDay.add(k); return true; });
-    const whoTag = p => { const ppl = planPeople(p); return ppl.length === 1 ? `<span style="color:${memberColor(ppl[0])}">${esc(ppl[0])}</span> <span class="opacity-30">·</span> ` : ''; };
+    // a timeline: one line down the side, a dot per item, everyone's names first
+    const names = p => planPeople(p).map(m => `<span style="color:${memberColor(m)}">${esc(m)}</span>`).join('<span class="opacity-40">, </span>');
+    const dotColor = p => p.type === 'visit' ? '#8b6d58' : p.type === 'hotel' ? '#a3825f' : memberColor(planPeople(p)[0]);
+    const item = (p, t, shown, title, sub, canDelete) => ({ t, html: `<div class="tl-item">
+            <span class="tl-dot" style="background:${dotColor(p)}"></span>
+            <div class="flex justify-between items-start gap-3">
+              <div class="min-w-0">
+                <p class="text-[11px] font-bold">${names(p)}</p>
+                <p class="text-sm font-bold">${title}</p>
+                ${shown || sub ? `<p class="text-[10px] opacity-60 font-bold">${[shown ? esc(shown) : '', sub].filter(Boolean).join(' • ')}</p>` : ''}
+              </div>
+              <div class="flex items-center gap-3 flex-shrink-0 pt-3"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button>${canDelete ? `<button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl leading-none">×</button>` : ''}</div>
+            </div>
+          </div>` });
+    const place = p => `<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a>`;
     const rows = [
-        ...dayPlans.map(p => ({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html: `<div class="flex justify-between items-center gap-3">
-            <div class="min-w-0"><p class="text-sm font-bold">${whoTag(p)}${p.type === 'arrive' ? icPlane('arrive') + ' Arrive · ' : p.type === 'depart' ? icPlane('depart') + ' Depart · ' : p.type === 'hotel' ? icHotel() + ' ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
-            ${p.type === 'hotel' ? `<p class="text-[10px] opacity-60 font-bold">Check-in ${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''} → Check-out ${p.endDate ? fmtShort(p.endDate) : '?'}${p.endTime ? ' ' + esc(p.endTime) : ''}</p>` : ''}
-            ${p.time && p.type !== 'hotel' || p.note ? `<p class="text-[10px] opacity-60 font-bold">${p.type !== 'hotel' ? esc(p.time || '') : ''}${p.time && p.type !== 'hotel' && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
-            <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p></div>
-            <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
-          </div>` })),
-        ...checkouts.map(p => ({ t: p.endTime || DEFAULT_TIME.checkout, o: 1, html: `<div class="flex justify-between items-center gap-3">
-            <div class="min-w-0"><p class="text-sm font-bold">${whoTag(p)}${icHotel()} Check-out · ${esc(p.place)}</p>${p.endTime ? `<p class="text-[10px] opacity-60 font-bold">${esc(p.endTime)}</p>` : ''}<p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p></div>
-            <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button></div>
-          </div>` }))
+        ...dayPlans.map(p => ({ o: TYPE_ORDER[p.type] ?? 2, ...item(p, timeKey(p), p.time,
+            `${p.type === 'arrive' ? icPlane('arrive') + ' Arrive · ' : p.type === 'depart' ? icPlane('depart') + ' Depart · ' : p.type === 'hotel' ? icHotel() + ' Check-in · ' : '📍 '}${place(p)}`,
+            [p.type === 'hotel' ? `until ${p.endDate ? fmtShort(p.endDate) : '?'}${p.endTime ? ' ' + esc(p.endTime) : ''}` : '', esc(p.note || '')].filter(Boolean).join(' • '), true) })),
+        ...checkouts.map(p => ({ o: 1, ...item(p, p.endTime || DEFAULT_TIME.checkout, p.endTime, `${icHotel()} Check-out · ${place(p)}`, '', false) }))
     ].map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k);
     document.getElementById('calDayDetail').innerHTML = `<div class="space-y-4">
         <div class="flex justify-between items-end px-2"><p class="serif text-2xl font-bold">${dayNo ? 'Day ' + dayNo : sel.toLocaleDateString('en-US', { weekday: 'long' })}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${calSelected.replace(/-/g, '/')}</p></div>
-        ${rows.length ? `<div class="app-card p-5 space-y-4">${rows.map(r => r.html).join('<div class="border-t border-black/5"></div>')}</div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
+        ${rows.length ? `<div class="app-card p-5"><div class="timeline">${rows.map(r => r.html).join('')}</div></div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
         <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
       </div>`;
   }
