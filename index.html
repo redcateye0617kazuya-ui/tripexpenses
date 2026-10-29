@@ -66,10 +66,6 @@
     .mg-cells .plan-chip { overflow: hidden; }
     .chip-c { position: relative; z-index: 1; }
     .plan-chip[style*="color:#ffffff"] .chip-c { text-shadow: 0 1px 2px rgba(60, 40, 30, 0.55); }
-    /* phones: narrow columns, so box text wraps instead of being cut off */
-    .mg.narrow .mg-date { padding: 6px 4px; }
-    .mg.narrow .mg-cells .plan-chip { margin: 3px 3px 3px 12px; padding: 3px 5px; }
-    .mg.narrow .mg-cells .plan-chip.slim { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .mg-cells .plan-chip { position: relative; z-index: 4; margin: 3px 5px 3px 15px; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
     #planDate, #planRetDate, #planOutDate { padding: 14px 18px; border-radius: 20px; font-size: 16px !important; text-align: center; }
@@ -984,8 +980,8 @@
     const pos = (i, w = 1) => `left:calc(${i} * 100% / ${N}); width:calc(${w} * 100% / ${N});`;
     // contiguous runs of columns, so a group item becomes one wide box (or a few, if its people aren't side by side)
     const runs = idx => { const r = []; idx.sort((a, b) => a - b).forEach(i => { const last = r[r.length - 1]; if (last && i === last.s + last.w) last.w++; else r.push({ s: i, w: 1 }); }); return r; };
-    // phones get narrower columns so more people fit across the screen
-    const narrow = window.innerWidth < 640, COLW = narrow ? 64 : 112, DATEW = narrow ? 48 : 60;
+    // same column widths everywhere; with more people the table scrolls sideways
+    const COLW = 112, DATEW = 60;
     const span = idx => idx.length ? { s: Math.min(...idx), w: Math.max(...idx) - Math.min(...idx) + 1, idx } : null;
     const uniq = list => { const seen = new Set(); return list.filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); };
 
@@ -1042,7 +1038,6 @@
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(${COLW}px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
     grid.style.setProperty('--dw', DATEW + 'px');
-    grid.classList.toggle('narrow', narrow);
     grid.style.minWidth = `calc(${DATEW}px + ${N} * ${COLW}px)`;
     grid.innerHTML = head + body;
   }
@@ -1132,8 +1127,6 @@
     saveAll(); renderCalendar();
   }
 
-  let lastNarrow = window.innerWidth < 640;
-  window.addEventListener('resize', () => { const n = window.innerWidth < 640; if (n !== lastNarrow) { lastNarrow = n; if (state && state.id != null) renderCalendar(); } });
   function shiftCalMonth(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); renderCalendar(); }
   function selectCalDay(ds) { calSelected = ds; renderCalendar(); }
   function setCalFilter(i) { calFilter = i === 'ALL' ? 'ALL' : (planMembers()[i] ?? 'ALL'); renderCalendar(); }
