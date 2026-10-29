@@ -61,6 +61,8 @@
     .mg-row.drop-target .mg-cells { background: rgba(109, 93, 81, 0.10); }
     .plan-chip.drag-src { opacity: 0.35; }
     .drag-ghost { position: fixed; z-index: 200; pointer-events: none; opacity: 0.9; transform: rotate(-2deg); box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
+    .mg-cells .join-row { margin-top: 3px; gap: 2px; }
+    .mg-cells .join-dot { width: 16px; height: 16px; font-size: 8px; line-height: 13px; }
     .mg-cells .plan-chip.slim { padding: 2px 6px; font-size: 10px; line-height: 1.3; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-cells .plan-chip { position: relative; z-index: 4; margin: 3px 5px 3px 15px; }
     .plan-chip { display: block; border-radius: 10px; padding: 4px 6px; margin-bottom: 4px; font-weight: 600; line-height: 1.25; word-break: break-word; }
@@ -976,6 +978,7 @@
     const pos = (i, w = 1) => `left:calc(${i} * 100% / ${N}); width:calc(${w} * 100% / ${N});`;
     // contiguous runs of columns, so a group item becomes one wide box (or a few, if its people aren't side by side)
     const runs = idx => { const r = []; idx.sort((a, b) => a - b).forEach(i => { const last = r[r.length - 1]; if (last && i === last.s + last.w) last.w++; else r.push({ s: i, w: 1 }); }); return r; };
+    const span = idx => idx.length ? { s: Math.min(...idx), w: Math.max(...idx) - Math.min(...idx) + 1 } : null;
     const uniq = list => { const seen = new Set(); return list.filter(p => { const k = p.type + '|' + normPlace(p.place); if (seen.has(k)) return false; seen.add(k); return true; }); };
 
     // stays: earliest arrival to latest departure per person (dashed to the last row if no return yet)
@@ -1018,14 +1021,17 @@
         }
         // items: plans on this day and hotel check-outs, in time order; plans span their people's columns
         const items = [];
-        uniq(plans.filter(p => p.date === ds)).forEach(p => runs(planPeople(p).map(col).filter(i => i >= 0)).forEach(rn => {
-            // hotels are a single slim line (the shaded columns already show who's staying)
+        // one box per plan, spanning from its leftmost to its rightmost person (the circles show exactly who's in)
+        uniq(plans.filter(p => p.date === ds)).forEach(p => { const rn = span(planPeople(p).map(col).filter(i => i >= 0)); if (!rn) return;
+            const t = p.time ? `<span class="opacity-60 font-semibold">${esc(p.time)}</span> ` : '';
             const html = p.type === 'hotel'
                 ? chip(rn, `${icHotel()} ${esc(p.place)} <span class="opacity-60 font-semibold">· in${p.time ? ' ' + esc(p.time) : ''}</span>`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true, 'hotel')
-                : chip(rn, `${p.type !== 'visit' ? typeIcon(p) + ' ' : ''}${esc(p.place)}`, p.time ? esc(p.time) : '', `openPlanModal('${p.id}')`, planExtras(p, true) + joinRow(p), 'plan:' + p.id, false, isTravel(p) ? 'travel' : 'visit');
+                : isTravel(p)
+                ? chip(rn, `${typeIcon(p)} ${esc(p.place)}${p.time ? ` <span class="opacity-60 font-semibold">· ${esc(p.time)}</span>` : ''}`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true, 'travel')
+                : chip(rn, `${t}${esc(p.place)}`, '', `openPlanModal('${p.id}')`, joinRow(p), 'plan:' + p.id, false, 'visit');
             items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, html });
-        }));
-        uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => runs(planPeople(h).map(col).filter(i => i >= 0)).forEach(rn =>
+        });
+        uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => [span(planPeople(h).map(col).filter(i => i >= 0))].filter(Boolean).forEach(rn =>
             items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true, 'hotel') })));
         const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k).map(x => x.html).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(112px, 1fr))">${layers}${itemsHtml}</div></div>`;
