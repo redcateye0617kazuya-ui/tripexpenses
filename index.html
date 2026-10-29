@@ -932,8 +932,14 @@
         const d = new Date(y, mo, day), ds = fmtYMD(d);
         const inTrip = hasRange && d >= start && d <= end;
         const dayList = byDate[ds] || [];
-        const marks = planMembers().concat([...new Set(dayList.map(p => p.member))].filter(m => !planMembers().includes(m))).filter(m => calFilter === 'ALL' || m === calFilter).flatMap(m => plansFor(dayList.filter(p => p.type !== 'hotel'), m).map(p => `<span class="plan-mark" style="color:${memberColor(m)}">${p.type !== 'visit' ? typeIcon(p) : '●'}</span>`)).join('')
-            + [...new Set(dayList.filter(p => p.type === 'hotel').map(p => normPlace(p.place)))].map(() => `<span class="plan-mark" style="color:#6d5d51">${icHotel()}</span>`).join('');
+        // one mark per plan (not per person): ● activity, H hotel, plane for flights; at most 4, then +n
+        const seenM = new Set();
+        const dayUniq = dayList.filter(p => { const k = p.type + '|' + normPlace(p.place); if (seenM.has(k)) return false; seenM.add(k); return true; }).sort(sortPlans);
+        const markOf = p => { const ppl = planPeople(p);
+            if (p.type === 'visit') return `<span class="plan-mark" style="color:#8b6d58">●</span>`;
+            if (p.type === 'hotel') return `<span class="plan-mark" style="color:#a3825f">${icHotel()}</span>`;
+            return `<span class="plan-mark" style="color:${ppl.length === 1 ? memberColor(ppl[0]) : '#5b7695'}">${typeIcon(p)}</span>`; };
+        const marks = dayUniq.slice(0, 4).map(markOf).join('') + (dayUniq.length > 4 ? `<span class="plan-mark" style="color:#8c7a6b; font-weight:700">+${dayUniq.length - 4}</span>` : '');
         g += `<div onclick="selectCalDay('${ds}')" class="cal-cell ${inTrip ? 'in-trip' : ''} ${ds === calSelected ? 'selected' : ''} ${ds === today ? 'today' : ''}">
                 <span class="cal-num ${inTrip ? '' : 'opacity-40'}">${day}</span>
                 <div class="flex flex-wrap justify-center gap-[2px]">${marks}</div>
