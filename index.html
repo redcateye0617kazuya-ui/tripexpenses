@@ -949,7 +949,7 @@
                 <div class="min-w-0"><p class="text-sm font-bold">${p.type === 'arrive' ? icPlane('arrive') + ' Arrive · ' : p.type === 'depart' ? icPlane('depart') + ' Depart · ' : p.type === 'hotel' ? icHotel() + ' ' : '📍 '}<a href="${mapsLink(p.place)}" target="_blank" rel="noopener" class="underline decoration-dotted">${esc(p.place)}</a></p>
                 ${p.type === 'hotel' ? `<p class="text-[10px] opacity-60 font-bold">Check-in ${fmtShort(p.date)}${p.time ? ' ' + esc(p.time) : ''} → Check-out ${p.endDate ? fmtShort(p.endDate) : '?'}${p.endTime ? ' ' + esc(p.endTime) : ''}</p>` : ''}
                 ${p.time && p.type !== 'hotel' || p.note ? `<p class="text-[10px] opacity-60 font-bold">${p.type !== 'hotel' ? esc(p.time || '') : ''}${p.time && p.type !== 'hotel' && p.note ? ' • ' : ''}${esc(p.note || '')}</p>` : ''}
-                <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p>${joinRow(p)}</div>
+                <p class="flex flex-wrap gap-x-3">${planExtras(p, false)}</p></div>
                 <div class="flex items-center gap-3 flex-shrink-0"><button onclick="openPlanModal('${p.id}')" class="text-blue-400 font-bold text-xs">✎</button><button onclick="deletePlan('${p.id}')" class="text-gray-300 px-2 text-xl">×</button></div>
               </div>`).join('')}
           </div>`).join('') : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
