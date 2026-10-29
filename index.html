@@ -103,7 +103,7 @@
     </div>
 
     <div class="px-6 py-2 space-y-4">
-      <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveAll()" class="serif font-bold">
+      <input id="tripName" type="text" placeholder="Trip Name..." oninput="saveSoon()" onchange="saveAll()" class="serif font-bold">
       <div id="claimBanner" class="hidden"></div>
       <div class="flex gap-3 bg-white/40 p-3 rounded-[24px] items-end">
           <div class="flex-1 min-w-0"><p class="text-[9px] font-bold opacity-40 mb-1 ml-3 uppercase tracking-tighter">Start Date</p><input type="date" id="startDate" onchange="saveAll()"></div>
@@ -451,7 +451,7 @@
         currentTripId = trips[0].id;
         localStorage.setItem('tripLedger_currentId', currentTripId);
     }
-    init();
+    scheduleInit();
   }
 
   function showGate(mode, msg) {
@@ -469,8 +469,25 @@
   }
   function hideGate() { document.getElementById('gate').classList.add('hidden'); }
 
+  // Many updates can arrive at once (ours echoing back, friends' edits): redraw at most once per frame,
+  // and not in the middle of a drag
+  let initQueued = false, initAfterDrag = false;
+  function scheduleInit() {
+    if (typeof drag !== 'undefined' && drag && drag.active) { initAfterDrag = true; return; }
+    if (initQueued) return;
+    initQueued = true;
+    requestAnimationFrame(() => { initQueued = false; if (trips.length) init(); });
+  }
+  // typing the trip name updates the tabs at once and saves after a short pause
+  let saveTimer = null;
+  function saveSoon() {
+    state.name = document.getElementById('tripName').value; renderTabs();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveTimer = null; saveAll(); }, 500);
+  }
   function init() {
     state = trips.find(t => t.id == currentTripId) || trips[0];
+    if (saveTimer) state.name = document.getElementById('tripName').value; // keep a name that's still being typed
     if(!state.members) state.members = [];
     if(!state.expenses) state.expenses = [];
     if(!state.poolDeposits) state.poolDeposits = [];
@@ -487,10 +504,12 @@
     ).join('');
   }
 
-  function switchTrip(id) { currentTripId = id; localStorage.setItem('tripLedger_currentId', id); init(); }
+  function switchTrip(id) { if (saveTimer) saveAll(); switchTripNow(id); }
+  function switchTripNow(id) { currentTripId = id; localStorage.setItem('tripLedger_currentId', id); init(); }
 
   function saveAll() {
     if (!state || state.id == null) return;
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     state.name = document.getElementById('tripName').value;
     state.tripName = state.name;
     state.startDate = document.getElementById('startDate').value;
@@ -512,13 +531,16 @@
   function handleDrop(e, newDate) { e.preventDefault(); const id = e.dataTransfer.getData("text/plain"); const exp = state.expenses.find(x => x.id == id); if (exp && exp.date !== newDate) { exp.date = newDate; saveAll(); } }
 
   function syncUI() {
-    document.getElementById('tripName').value = state.name || '';
-    document.getElementById('startDate').value = state.startDate || '';
-    document.getElementById('endDate').value = state.endDate || '';
-    document.getElementById('targetCurr').value = state.targetCurr || 'JPY';
-    document.getElementById('currentRateVal').value = state.rateVal || 1;
+    // don't overwrite a box someone is typing in (another person's update can arrive meanwhile)
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el !== document.activeElement && el.value !== String(v)) el.value = v; };
+    if (!saveTimer) setVal('tripName', state.name || '');
+    setVal('startDate', state.startDate || '');
+    setVal('endDate', state.endDate || '');
+    setVal('targetCurr', state.targetCurr || 'JPY');
+    setVal('currentRateVal', state.rateVal || 1);
     document.querySelectorAll('.target-curr-label').forEach(el => el.innerText = state.targetCurr);
-    document.getElementById('exCurr').innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`;
+    const exCurr = document.getElementById('exCurr');
+    if (exCurr.dataset.cur !== state.targetCurr) { const keep = exCurr.value; exCurr.innerHTML = `<option value="${state.targetCurr}">${state.targetCurr}</option><option value="HKD">HKD</option>`; exCurr.dataset.cur = state.targetCurr; if ([state.targetCurr, 'HKD'].includes(keep)) exCurr.value = keep; }
     document.getElementById('memberList').innerHTML = (state.members || []).map((m, i) => {
         const key = linkedKeyOf(state, m);
         return `<div class="px-2 py-1 text-[12px] font-bold flex items-center gap-1" title="${key ? esc(state.allow[key]) : 'No account'}">${esc(m)}<button onclick="removeMember(${i})" class="text-red-300 px-1">×</button></div>`;
@@ -1067,7 +1089,9 @@
     }).join('');
     grid.style.setProperty('--dw', DATEW + 'px');
     grid.style.minWidth = `calc(${DATEW}px + ${N} * ${COLW}px)`;
+    const wrap = grid.parentElement, keepX = wrap.scrollLeft;
     grid.innerHTML = head + body;
+    wrap.scrollLeft = keepX;
   }
   // ---------- Drag a box in the master calendar to another day ----------
   // Mouse: just drag. Touch: press and hold briefly, then drag (so normal scrolling still works).
@@ -1126,6 +1150,7 @@
     document.querySelectorAll('.mg-row.drop-target').forEach(r => r.classList.remove('drop-target'));
     const row = drop && rowUnder(d.x, d.y);
     if (row && row.dataset.date !== d.from) moveItem(d.key, d.from, row.dataset.date);
+    if (initAfterDrag) { initAfterDrag = false; scheduleInit(); }
   }
   function moveItem(key, from, to) {
     const [kind, id] = key.split(':');
