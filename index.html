@@ -99,6 +99,8 @@
     .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: #d9cfc1; border-radius: 2px; }
     .tl-item { position: relative; padding-bottom: 14px; }
     .tl-item:last-child { padding-bottom: 0; }
+    /* free time between items: blank space, longer gap = more space */
+    .tl-gap { min-height: 16px; }
     .tl-dot { position: absolute; left: -21px; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-cream); box-shadow: 0 0 0 1px #d9cfc1; }
     /* while the live data loads over last visit's copy: view-only, with a small tag */
     body.syncing main { pointer-events: none; }
@@ -885,6 +887,8 @@
   // Within a day, things are ordered by time; without a time they sit where they usually happen
   const DEFAULT_TIME = { arrive: '00:00', visit: '12:00', hotel: '15:00', checkout: '11:00', depart: '23:58', expense: '23:59' };
   function timeKey(p) { return p.time || DEFAULT_TIME[p.type] || '12:00'; }
+  // free time between two entered times, in hours (only gaps of 2h or more count, so the list stays tight otherwise)
+  function freeHours(a, b) { const m = t => { const [h, mi] = t.split(':').map(Number); return h * 60 + (mi || 0); }; const h = (m(b) - m(a)) / 60; return h >= 2 ? h : 0; }
   function sortPlans(a, b) { return (a.date || '').localeCompare(b.date || '') || timeKey(a).localeCompare(timeKey(b)) || (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1) || (a.time || '99').localeCompare(b.time || '99') || a.id - b.id; }
   function mapsLink(place) { return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`; }
   function fmtShort(ds) { const d = parseYMD(ds); return d ? `${d.getMonth() + 1}/${d.getDate()}` : ds; }
@@ -1034,7 +1038,7 @@
     // a timeline: one line down the side, a dot per item, everyone's names first
     const names = p => planPeople(p).map(m => `<span style="color:${memberColor(m)}">${esc(m)}</span>`).join('<span class="opacity-40">, </span>');
     const dotColor = p => p.type === 'visit' ? '#8b6d58' : p.type === 'hotel' ? '#a3825f' : memberColor(planPeople(p)[0]);
-    const item = (p, t, shown, title, sub, canDelete) => ({ t, html: `<div class="tl-item">
+    const item = (p, t, shown, title, sub, canDelete) => ({ t, real: !!shown, html: `<div class="tl-item">
             <span class="tl-dot" style="background:${dotColor(p)}"></span>
             <div class="flex justify-between items-start gap-3">
               <div class="min-w-0">
@@ -1054,7 +1058,8 @@
     ].map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || a.k - b.k);
     document.getElementById('calDayDetail').innerHTML = `<div class="space-y-4">
         <div class="flex justify-between items-end px-2"><p class="serif text-2xl font-bold">${dayNo ? 'Day ' + dayNo : sel.toLocaleDateString('en-US', { weekday: 'long' })}</p><p class="text-[10px] opacity-40 font-bold tracking-widest uppercase">${calSelected.replace(/-/g, '/')}</p></div>
-        ${rows.length ? `<div class="px-3 pt-1"><div class="timeline">${rows.map(r => r.html).join('')}</div></div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
+        ${rows.length ? `<div class="px-3 pt-1"><div class="timeline">${rows.map((r, i) => { const prev = rows[i - 1], h = prev && prev.real && r.real ? freeHours(prev.t, r.t) : 0;
+            return (h ? `<div class="tl-gap" style="height:${Math.min(h, 8) * 8}px"></div>` : '') + r.html; }).join('')}</div></div>` : '<p class="text-center py-2 text-[11px] opacity-30 italic">No plans yet</p>'}
         <button onclick="openPlanModal()" class="text-[11px] font-bold opacity-60 w-full py-4 rounded-[20px] bg-white/60 border border-white/40">+ ADD PLAN</button>
       </div>`;
   }
@@ -1132,11 +1137,17 @@
                 : isTravel(p)
                 ? chip(rn, `${typeIcon(p)} ${esc(p.place)}${p.time ? ` <span class="opacity-60 font-semibold">· ${esc(p.time)}</span>` : ''}`, '', `openPlanModal('${p.id}')`, '', 'plan:' + p.id, true, 'travel')
                 : chip(rn, `${t}${esc(p.place)}`, '', `openPlanModal('${p.id}')`, joinRow(p), 'plan:' + p.id, false, 'visit');
-            items.push({ t: timeKey(p), o: TYPE_ORDER[p.type] ?? 2, c: rn.s, html });
+            items.push({ t: timeKey(p), real: !!p.time, o: TYPE_ORDER[p.type] ?? 2, c: rn.s, rn, html });
         });
         uniq(hotels.filter(h => h.endDate === ds && h.endDate !== h.date)).forEach(h => [span(planPeople(h).map(col).filter(i => i >= 0))].filter(Boolean).forEach(rn =>
-            items.push({ t: h.endTime || DEFAULT_TIME.checkout, o: 1, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true, 'hotel') })));
-        const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || (a.c ?? 0) - (b.c ?? 0) || a.k - b.k).map(x => x.html).join('');
+            items.push({ t: h.endTime || DEFAULT_TIME.checkout, real: !!h.endTime, o: 1, rn, html: chip(rn, `${icHotel()} <span class="opacity-60 font-semibold">out${h.endTime ? ' ' + esc(h.endTime) : ''} ·</span> ${esc(h.place)}`, '', `openPlanModal('${h.id}')`, '', 'checkout:' + h.id, true, 'hotel') })));
+        const itemsHtml = items.map((x, k) => ({ ...x, k })).sort((a, b) => a.t.localeCompare(b.t) || a.o - b.o || (a.c ?? 0) - (b.c ?? 0) || a.k - b.k)
+            .map((x, i, all) => {
+                // free time since the last thing in the same column(s): leave a little blank space above
+                const prev = all.slice(0, i).reverse().find(y => y.rn.s < x.rn.s + x.rn.w && x.rn.s < y.rn.s + y.rn.w);
+                const h = prev && prev.real && x.real ? freeHours(prev.t, x.t) : 0;
+                return h ? x.html.replace('style="grid-column', `style="margin-top:${3 + Math.min(h, 8) * 4}px; grid-column`) : x.html;
+            }).join('');
         return `<div class="mg-row ${r.dim ? 'out-trip' : ''} ${ds === today ? 'is-today' : ''}" data-date="${ds}"><div class="mg-date">${dateCell}</div><div class="mg-cells" style="grid-template-columns:repeat(${N}, minmax(${COLW}px, 1fr))">${layers}${itemsHtml}</div></div>`;
     }).join('');
     grid.style.setProperty('--dw', DATEW + 'px');
